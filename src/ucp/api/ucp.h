@@ -3,6 +3,7 @@
 * Copyright (C) UT-Battelle, LLC. 2014-2017. ALL RIGHTS RESERVED.
 * Copyright (C) ARM Ltd. 2016-2017.  ALL RIGHTS RESERVED.
 * Copyright (C) Los Alamos National Security, LLC. 2018 ALL RIGHTS RESERVED.
+* Copyright (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
 * See file LICENSE for terms.
 */
 
@@ -125,7 +126,8 @@ enum ucp_params_field {
     UCP_PARAM_FIELD_MT_WORKERS_SHARED = UCS_BIT(5), /**< mt_workers_shared */
     UCP_PARAM_FIELD_ESTIMATED_NUM_EPS = UCS_BIT(6), /**< estimated_num_eps */
     UCP_PARAM_FIELD_ESTIMATED_NUM_PPN = UCS_BIT(7), /**< estimated_num_ppn */
-    UCP_PARAM_FIELD_NAME              = UCS_BIT(8)  /**< name */
+    UCP_PARAM_FIELD_NAME              = UCS_BIT(8), /**< name */
+    UCP_PARAM_FIELD_TIMEOUT_WARN      = UCS_BIT(9)  /**< request timeout warn */
 };
 
 
@@ -1125,6 +1127,13 @@ typedef struct ucp_params {
      * unique name will be created for you.
      */
     const char                         *name;
+
+    /**
+     * Pointer to a routine that is responsible for reporting peer info when
+     * request timeout. This function will be called when some requests blocking
+     * time exceeds the timeout threshold in @ref ucp_worker_progress.
+     */
+    ucp_timeout_warn_callback_t        timeout_warn;
 } ucp_params_t;
 
 
