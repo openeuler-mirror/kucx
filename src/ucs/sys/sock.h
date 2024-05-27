@@ -1,6 +1,6 @@
 /**
  * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2019. ALL RIGHTS RESERVED.
- * Copyright (C) Huawei Technologies Co., Ltd. 2020.  ALL RIGHTS RESERVED.
+ * Copyright (C) Huawei Technologies Co., Ltd. 2020-2024.  ALL RIGHTS RESERVED.
  *
  * See file LICENSE for terms.
  */
@@ -73,11 +73,10 @@ ucs_status_t ucs_netif_ioctl(const char *if_name, unsigned long request,
  * Check if the given interface is in an active state.
  *
  * @param [in]  if_name      Interface name to check.
- * @param [in]  af           Address family.
  *
  * @return 1 if true, otherwise 0
  */
-int ucs_netif_is_active(const char *if_name, sa_family_t af);
+int ucs_netif_is_active(const char *if_name);
 
 
 /**
