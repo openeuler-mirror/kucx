@@ -253,11 +253,11 @@ static ucs_config_field_t ucp_context_config_table[] = {
 
     {"MIN_PENDING_TIME", "3s",
      "Resolution for process pending time for schedule",
-     ucs_offsetof(ucp_config_t, ctx.min_pending_time), UCS_CONFIG_TYPE_TIME},
+     ucs_offsetof(ucp_context_config_t, min_pending_time), UCS_CONFIG_TYPE_TIME},
 
      {"REQ_TIMEOUT", "300s",
       "Request timeout threshold",
-      ucs_offsetof(ucp_config_t, ctx.req_timeout_thresh), UCS_CONFIG_TYPE_TIME},
+      ucs_offsetof(ucp_context_config_t, req_timeout_thresh), UCS_CONFIG_TYPE_TIME},
 
   {"ADDRESS_DEBUG_INFO",
 #if ENABLE_DEBUG_DATA
