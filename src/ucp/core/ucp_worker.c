@@ -2906,7 +2906,7 @@ static void ucp_worker_check_timeout(ucp_worker_h worker, unsigned count_complet
     /** start_time: the start tick of the blocking duration.
      *  last_time: last tick record.
      *  pending_time: Sum of scheduler pending time.
-    */
+     */
     static ucs_time_t start_time = 0, last_time = 0, pending_time = 0;
     ucs_time_t current_time, last_time_diff;
     double min_pending_time = worker->context->config.ext.min_pending_time;
@@ -2936,7 +2936,7 @@ static void ucp_worker_check_timeout(ucp_worker_h worker, unsigned count_complet
     }
 
     /* Calculate the time diff between the current and the start time,
-     * if time diff ecxeeds the timeout_thresh, determined as requests timeout. */
+     * if time diff exceeds the timeout_thresh, determined as requests timeout. */
     if (ucs_unlikely(ucs_time_to_sec(current_time - start_time - pending_time) > timeout_thresh)) {
         start_time = current_time;
         pending_time = 0;
@@ -2950,6 +2950,7 @@ out:
 unsigned ucp_worker_progress(ucp_worker_h worker)
 {
     unsigned count;
+    static uint32_t timeout_check_count = 0;
 
     /* worker->inprogress is used only for assertion check.
      * coverity[assert_side_effect]
@@ -2959,7 +2960,10 @@ unsigned ucp_worker_progress(ucp_worker_h worker)
     /* check that ucp_worker_progress is not called from within ucp_worker_progress */
     ucs_assert(worker->inprogress++ == 0);
     count = uct_worker_progress(worker->uct);
-    ucp_worker_check_timeout(worker, count);
+    if (++timeout_check_count % 1000 == 0) {
+        timeout_check_count = 0;
+        ucp_worker_check_timeout(worker, count);
+    }
     ucs_async_check_miss(&worker->async);
 
     /* coverity[assert_side_effect] */
