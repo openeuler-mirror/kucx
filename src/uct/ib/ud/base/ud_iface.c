@@ -1,7 +1,6 @@
 /**
 * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2021. ALL RIGHTS RESERVED.
-* Copyright (C) Huawei Technologies Co., Ltd. 2021.  ALL RIGHTS RESERVED.
-*
+* Copyright (C) Huawei Technologies Co., Ltd. 2021-2023. ALL RIGHTS RESERVED.
 * See file LICENSE for terms.
 */
 

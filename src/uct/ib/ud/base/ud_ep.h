@@ -1,6 +1,6 @@
 /**
 * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2014. ALL RIGHTS RESERVED.
-*
+* Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
 * See file LICENSE for terms.
 */
 
