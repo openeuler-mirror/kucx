@@ -428,4 +428,10 @@ ucp_request_recv_offload_first(ucp_request_t *req,
     ucp_tag_frag_hash_init_exp(matchq, req);
 }
 
+static UCS_F_ALWAYS_INLINE size_t
+ucp_tag_get_hash_size(ucp_tag_match_t *tm)
+{
+    return ucs_roundup_pow2(UCP_TAG_MATCH_HASH_SIZE);
+}
+
 #endif

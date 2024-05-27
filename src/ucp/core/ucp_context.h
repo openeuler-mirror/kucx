@@ -2,6 +2,7 @@
  * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2015. ALL RIGHTS RESERVED.
  * Copyright (C) ARM Ltd. 2016.  ALL RIGHTS RESERVED.
  * Copyright (C) Advanced Micro Devices, Inc. 2019. ALL RIGHTS RESERVED.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
  *
  * See file LICENSE for terms.
  */
@@ -164,6 +165,10 @@ typedef struct ucp_context_config {
     char                                   *proto_info_dir;
     /** Memory types that perform non-blocking registration by default */
     uint64_t                               reg_nb_mem_types;
+    /** Resolution for process pending time for schedule */
+    double                                 min_pending_time;
+    /** Request timeout threshold */
+    double                                 req_timeout_thresh;
 } ucp_context_config_t;
 
 
@@ -381,6 +386,8 @@ typedef struct ucp_context {
 
     /* Save cached uct configurations */
     ucs_list_link_t               cached_key_list;
+
+    ucp_timeout_warn_callback_t   timeout_warn;
 } ucp_context_t;
 
 
