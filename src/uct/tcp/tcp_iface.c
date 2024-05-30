@@ -1,6 +1,6 @@
 /**
  * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2019. ALL RIGHTS RESERVED.
- * Copyright (C) Huawei Technologies Co., Ltd. 2020.  ALL RIGHTS RESERVED.
+ * Copyright (C) Huawei Technologies Co., Ltd. 2020-2024.  ALL RIGHTS RESERVED.
  * See file LICENSE for terms.
  */
 
@@ -625,9 +625,7 @@ static UCS_CLASS_INIT_FUNC(uct_tcp_iface_t, uct_md_h md, uct_worker_h worker,
 {
     uct_tcp_iface_config_t *config = ucs_derived_of(tl_config,
                                                     uct_tcp_iface_config_t);
-    uct_tcp_md_t *tcp_md           = ucs_derived_of(md, uct_tcp_md_t);
     ucs_status_t status;
-    int i;
     ucs_mpool_params_t mp_params;
 
     UCT_CHECK_PARAM(params->field_mask & UCT_IFACE_PARAM_FIELD_OPEN_MODE,
@@ -753,16 +751,8 @@ static UCS_CLASS_INIT_FUNC(uct_tcp_iface_t, uct_md_h md, uct_worker_h worker,
         goto err_cleanup_tx_mpool;
     }
 
-    for (i = 0; i < tcp_md->config.af_prio_count; i++) {
-        status = ucs_netif_get_addr(self->if_name,
-                                    tcp_md->config.af_prio_list[i],
-                                    (struct sockaddr*)&self->config.ifaddr,
-                                    (struct sockaddr*)&self->config.netmask);
-        if (status == UCS_OK) {
-            break;
-        }
-    }
-
+    status = uct_tcp_netif_inaddr(self->if_name, (struct sockaddr_in*)&self->config.ifaddr,
+                                 (struct sockaddr_in*)&self->config.netmask);
     if (status != UCS_OK) {
         goto err_cleanup_rx_mpool;
     }
@@ -925,8 +915,7 @@ ucs_status_t uct_tcp_query_devices(uct_md_h md,
 
         is_active = 0;
         for (i = 0; i < tcp_md->config.af_prio_count; i++) {
-            if (ucs_netif_is_active(entry->d_name,
-                                    tcp_md->config.af_prio_list[i])) {
+            if (ucs_netif_is_active(entry->d_name)) {
                 is_active = 1;
                 break;
             }

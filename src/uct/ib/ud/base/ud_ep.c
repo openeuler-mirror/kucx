@@ -1,6 +1,6 @@
 /**
  * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2019. ALL RIGHTS RESERVED.
- *
+ * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
  * See file LICENSE for terms.
  */
 
@@ -321,12 +321,50 @@ static void uct_ud_ep_handle_timeout(uct_ud_ep_t *ep)
     }
 }
 
+/* Compare pending time and timeout */
+static ucs_status_t uct_ud_ep_remove_pending_time(uct_ud_ep_t *ep)
+{
+    uct_ud_iface_t *iface = ucs_derived_of(ep->super.super.iface, uct_ud_iface_t);
+
+    if (ep->tx.send_time <= iface->pending_time.start) {
+        return UCS_OK;
+    }
+
+    if (ep->tx.send_time > iface->pending_time.end) {
+        ucs_warn("ep timeout with send %lu ptw[ %lu - %lu ]",
+                  ep->tx.send_time, iface->pending_time.start, iface->pending_time.end);
+        return UCS_ERR_ENDPOINT_TIMEOUT; // timeout window and timeout window don't overlap
+    }
+
+    return UCS_OK;
+}
+
+/* Check whether the process is suspended. */
+static ucs_time_t uct_ud_ep_check_pending(uct_ud_iface_t *iface, ucs_time_t last)
+{
+    ucs_time_t cur = ucs_get_time();
+
+    /* If the time of entering the routine @uct_ud_ep_timer twice exceeds the minimum
+     * pending time, it is recorded in ptw. */
+    if (last != 0 && cur - last > iface->pending_time.min_tick) {
+        iface->pending_time.start = last;
+        iface->pending_time.end   = cur;
+        ucs_debug("set ptw start %lu end %lu last %lu min_tick %lu",
+                 iface->pending_time.start, iface->pending_time.end,
+                 iface->pending_time.last, iface->pending_time.min_tick);
+    }
+
+    return cur;
+}
+
 static void uct_ud_ep_timer(ucs_wtimer_t *self)
 {
     uct_ud_ep_t    *ep    = ucs_container_of(self, uct_ud_ep_t, timer);
     uct_ud_iface_t *iface = ucs_derived_of(ep->super.super.iface, uct_ud_iface_t);
-    ucs_time_t now, last_send, diff;
+    ucs_time_t now, cur, last_send, diff;
     ucs_status_t status;
+
+    cur = uct_ud_ep_check_pending(iface, iface->pending_time.last);
 
     UCT_UD_EP_HOOK_CALL_TIMER(ep);
 
@@ -338,7 +376,7 @@ static void uct_ud_ep_timer(ucs_wtimer_t *self)
                 goto timer_backoff;
             }
         }
-        return;
+        goto out;
     }
 
     uct_ud_ep_assert_tx_window_nonempty(ep);
@@ -372,15 +410,24 @@ static void uct_ud_ep_timer(ucs_wtimer_t *self)
 
     diff = now - ep->tx.send_time;
     if (diff > iface->config.peer_timeout) {
-        ucs_debug("ep %p: timeout of %.2f sec, config::peer_timeout - %.2f sec",
-                  ep, ucs_time_to_sec(diff),
-                  ucs_time_to_sec(iface->config.peer_timeout));
-        uct_ud_ep_handle_timeout(ep);
-        return;
+        uct_ud_ep_check_pending(iface, cur);
+        status = uct_ud_ep_remove_pending_time(ep);
+        if (status == UCS_ERR_ENDPOINT_TIMEOUT) {
+            ucs_debug("ep %p: timeout of %.2f sec, config::peer_timeout - %.2f sec",
+                    ep, ucs_time_to_sec(diff),
+                    ucs_time_to_sec(iface->config.peer_timeout));
+            uct_ud_ep_handle_timeout(ep);
+            goto out;
+        }
     }
 
 timer_backoff:
     uct_ud_ep_timer_backoff(ep);
+out:
+    /* The suspension may occur between the following two lines of code.
+     * Therefore, we need to assign a value to @last before check_pending.*/
+    iface->pending_time.last = ucs_get_time();
+    uct_ud_ep_check_pending(iface, cur);
 }
 
 UCS_CLASS_INIT_FUNC(uct_ud_ep_t, uct_ud_iface_t *iface,
@@ -420,7 +467,7 @@ uct_ud_ep_is_last_pending_elem(uct_ud_ep_t *ep, ucs_arbiter_elem_t *elem)
              /* only two elements are in the group (the 1st element is the
               * current one, the 2nd (or the last) element is the control one) */
              (ucs_arbiter_group_tail(&ep->tx.pending.group) == &ep->tx.pending.elem)));
-            
+
 }
 
 static ucs_arbiter_cb_result_t

@@ -4,6 +4,7 @@
 * Copyright (C) IBM 2015. ALL RIGHTS RESERVED.
 * Copyright (C) Los Alamos National Security, LLC. 2018. ALL RIGHTS RESERVED.
 * Copyright (C) Arm, Ltd. 2021. ALL RIGHTS RESERVED.
+* Copyright (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
 *
 * See file LICENSE for terms.
 */
@@ -300,6 +301,16 @@ typedef void (*ucp_request_init_callback_t)(void *request);
  */
 typedef void (*ucp_request_cleanup_callback_t)(void *request);
 
+/**
+ * @ingroup UCP_CONTEXT
+ * @brief Request timeout warn callback.
+ *
+ * This callback routine is responsible for reporting peer info
+ * when request timeout.
+ *
+ * @param [in]  tag   tag of timeout request.
+ */
+typedef void (*ucp_timeout_warn_callback_t)(uint64_t tag);
 
 /**
  * @ingroup UCP_COMM
@@ -628,7 +639,7 @@ typedef ucs_status_t (*ucp_am_callback_t)(void *arg, void *data, size_t length,
  * @param [in]  header        User defined active message header.
  *                            If @a header_length is 0, this value is undefined
  *                            and must not be accessed.
- * @param [in]  header_length Active message header length in bytes. 
+ * @param [in]  header_length Active message header length in bytes.
  * @param [in]  data          Points to the received data if @a
  *                            UCP_AM_RECV_ATTR_FLAG_RNDV flag is not set in
  *                            @ref ucp_am_recv_param_t.recv_attr. Otherwise
@@ -801,8 +812,8 @@ typedef struct ucp_ep_params {
  *     ep_attrs.transports.entry_size = sizeof(ucp_transport_entry_t);
  *     status = ucp_ep_query(ep, &ep_attrs);
  *     if (status == UCS_OK) {
- *         // ep_attrs.transports.num_entries = number of returned entries 
- *         // ... process transport info ... 
+ *         // ep_attrs.transports.num_entries = number of returned entries
+ *         // ... process transport info ...
  *     }
  *   }
  * @endcode
@@ -821,7 +832,7 @@ typedef struct {
     /**
      * The name of a transport layer used by this endpoint. This '\0'-terminated
      * string is valid until the endpoint is closed using a
-     * @ref ucp_ep_close_nbx call. 
+     * @ref ucp_ep_close_nbx call.
      */
     const char *transport_name;
 
@@ -840,7 +851,7 @@ typedef struct {
  * @brief Structure containing an array of transport layers and device names
  * used by an endpoint.
  *
- * The caller is responsible for allocation and deallocation of 
+ * The caller is responsible for allocation and deallocation of
  * this structure.
  */
 typedef struct {
