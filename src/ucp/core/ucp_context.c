@@ -1,6 +1,7 @@
 /**
  * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2019. ALL RIGHTS RESERVED.
  * Copyright (C) ARM Ltd. 2016.  ALL RIGHTS RESERVED.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
  *
  * See file LICENSE for terms.
  */
@@ -249,6 +250,14 @@ static ucs_config_field_t ucp_context_config_table[] = {
    "          the DEVICE atomic mode, the DEVICE mode is selected.\n"
    "          Otherwise the CPU mode is selected.",
    ucs_offsetof(ucp_context_config_t, atomic_mode), UCS_CONFIG_TYPE_ENUM(ucp_atomic_modes)},
+
+  {"MIN_PENDING_TIME", "3s",
+   "Resolution for process pending time for schedule",
+   ucs_offsetof(ucp_context_config_t, min_pending_time), UCS_CONFIG_TYPE_TIME},
+
+  {"REQ_TIMEOUT", "300s",
+   "Request timeout threshold",
+   ucs_offsetof(ucp_context_config_t, req_timeout_thresh), UCS_CONFIG_TYPE_TIME},
 
   {"ADDRESS_DEBUG_INFO",
 #if ENABLE_DEBUG_DATA
@@ -505,7 +514,7 @@ static ucs_config_field_t ucp_config_table[] = {
    "  [a-z] - matches one character from the range given in the bracket.",
    ucs_offsetof(ucp_config_t, protos), UCS_CONFIG_TYPE_ALLOW_LIST},
 
-  {"ALLOC_PRIO", "md:sysv,md:posix,huge,thp,md:*,mmap,heap",
+  {"ALLOC_PRIO", "md:sdma,md:sysv,md:posix,huge,thp,md:*,mmap,heap",
    "Priority of memory allocation methods. Each item in the list can be either\n"
    "an allocation method (huge, thp, mmap, libc) or md:<NAME> which means to use the\n"
    "specified memory domain for allocation. NAME can be either a UCT component\n"
@@ -556,8 +565,8 @@ UCS_CONFIG_DECLARE_TABLE(ucp_config_table, "UCP context", NULL, ucp_config_t)
 
 static ucp_tl_alias_t ucp_tl_aliases[] = {
   { "mm",    { "posix", "sysv", "xpmem", NULL } }, /* for backward compatibility */
-  { "sm",    { "posix", "sysv", "xpmem", "knem", "cma", NULL } },
-  { "shm",   { "posix", "sysv", "xpmem", "knem", "cma", NULL } },
+  { "sm",    { "posix", "sysv", "xpmem", "knem", "cma", "sdma", NULL } },
+  { "shm",   { "posix", "sysv", "xpmem", "knem", "cma", "sdma", NULL } },
   { "ib",    { "rc_verbs", "ud_verbs", "rc_mlx5", "ud_mlx5", "dc_mlx5", NULL } },
   { "ud_v",  { "ud_verbs", NULL } },
   { "ud_x",  { "ud_mlx5", NULL } },
@@ -1815,6 +1824,12 @@ static void ucp_apply_params(ucp_context_h context, const ucp_params_t *params,
                           params->name);
     } else {
         ucs_snprintf_zero(context->name, UCP_ENTITY_NAME_MAX, "%p", context);
+    }
+
+    if (params->field_mask & UCP_PARAM_FIELD_TIMEOUT_WARN) {
+        context->timeout_warn = params->timeout_warn;
+    } else {
+        context->timeout_warn = NULL;
     }
 }
 

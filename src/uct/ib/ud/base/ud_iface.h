@@ -1,6 +1,7 @@
 /**
 * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2020. ALL RIGHTS RESERVED.
-*
+* Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
+* 
 * See file LICENSE for terms.
 */
 
@@ -59,6 +60,7 @@ typedef struct uct_ud_iface_config {
     double                        timer_backoff;
     double                        event_timer_tick;
     int                           dgid_check;
+    double                        min_pending_time;
     unsigned                      max_window;
     unsigned                      rx_async_max_poll;
 } uct_ud_iface_config_t;
@@ -212,7 +214,22 @@ struct uct_ud_iface {
         unsigned                  last_len;
         khash_t(uct_ud_iface_gid) hash;
     } gid_table;
-};
+
+
+    /* pending time window(ptw), used to record the start time @start
+     * and end time @end of the suspension */
+    struct
+    {
+        /* minimum pending time, default 3s*/
+        ucs_time_t                min_tick;
+        /* last time enter routime @uct_ud_ep_timer */
+        volatile ucs_time_t       last;
+        /* pending time window start */
+        volatile ucs_time_t       start;
+        /* pending time window end */
+        volatile ucs_time_t       end;
+    } pending_time;
+};   
 
 
 UCS_CLASS_DECLARE(uct_ud_iface_t, uct_ud_iface_ops_t*, uct_iface_ops_t*,

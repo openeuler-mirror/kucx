@@ -1,6 +1,6 @@
 /**
 * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2019. ALL RIGHTS RESERVED.
-* Copyright (C) Huawei Technologies Co., Ltd. 2020.  ALL RIGHTS RESERVED.
+* Copyright (C) Huawei Technologies Co., Ltd. 2020-2024.  ALL RIGHTS RESERVED.
 *
 * See file LICENSE for terms.
 */
@@ -162,9 +162,22 @@ out:
     return status;
 }
 
-int ucs_netif_is_active(const char *if_name, sa_family_t af)
+int ucs_netif_is_active(const char *if_name)
 {
-    return ucs_netif_get_addr(if_name, af, NULL, NULL) == UCS_OK;
+    ucs_status_t status;
+    struct ifreq ifr;
+
+    status = ucs_netif_ioctl(if_name, SIOCGIFADDR, &ifr);
+    if (status != UCS_OK) {
+        return 0;
+    }
+
+    status = ucs_netif_ioctl(if_name, SIOCGIFFLAGS, &ifr);
+    if (status != UCS_OK) {
+        return 0;
+    }
+
+    return ucs_netif_flags_is_active(ifr.ifr_flags);
 }
 
 unsigned ucs_netif_bond_ad_num_ports(const char *bond_name)
