@@ -20,13 +20,17 @@
 #define EP_PROGRESS_TIMEOUT 1000
 
 static ucs_config_field_t uct_sdma_iface_config_table[] = {
-    {"SDMA_", "", NULL, ucs_offsetof(uct_sdma_iface_config_t, super), UCS_CONFIG_TYPE_TABLE(uct_iface_config_table)},
+    {"SDMA_", "", NULL,
+     ucs_offsetof(uct_sdma_iface_config_t, super),
+     UCS_CONFIG_TYPE_TABLE(uct_iface_config_table)},
 
-    {"SEG_SIZE",
-     "8k",
-     "Size of copy-out buffer",
+    {"SEG_SIZE", "8k", "Size of copy-out buffer",
      ucs_offsetof(uct_sdma_iface_config_t, seg_size),
      UCS_CONFIG_TYPE_MEMUNITS},
+
+    {"BW", "16911MBs", "BW of SDMA",
+     ucs_offsetof(uct_sdma_iface_config_t, bw),
+     UCS_CONFIG_TYPE_BW},
 
     {NULL}
 };
@@ -47,7 +51,7 @@ ucs_status_t uct_sdma_iface_progress_exec(uct_sdma_iface_t *iface)
     i = sq->head;
     while (i != sq->tail) {
         /**
-         * 如果当前任务还未结束，则认为后续的任务都没有结束
+         * 如果当前任务还未结束，则认为后续的任务都没有结束。
          * 约束：sdma任务是按顺序执行完毕的
          */
         if (sq->reqs[i].is_over != 1) {
@@ -144,8 +148,8 @@ static ucs_status_t uct_sdma_iface_query(uct_iface_h tl_iface, uct_iface_attr_t 
     attr->cap.am.max_iov = SIZE_MAX;
 
     attr->latency = ucs_linear_func_make(0, 0);
-    attr->bandwidth.dedicated = SDMA_BANDWIDTH * UCS_MBYTE;
-    attr->bandwidth.shared = 0;
+    attr->bandwidth.dedicated = 0;
+    attr->bandwidth.shared = iface->config.bw;
     attr->overhead = 10e-9;
     attr->priority = 1;
     return UCS_OK;
@@ -251,6 +255,7 @@ static UCS_CLASS_INIT_FUNC(uct_sdma_iface_t, uct_md_h md, uct_worker_h worker, c
     int cores_per_skt;
     int cores_per_die;
     int pasid;
+    uct_sdma_iface_config_t *config = ucs_derived_of(tl_config, uct_sdma_iface_config_t);
 
     UCS_CLASS_CALL_SUPER_INIT(uct_base_iface_t, &uct_sdma_iface_ops, &uct_base_iface_internal_ops, md, worker, params,
         tl_config UCS_STATS_ARG((params->field_mask & UCT_IFACE_PARAM_FIELD_STATS_ROOT) ? params->stats_root : NULL)
@@ -274,6 +279,7 @@ static UCS_CLASS_INIT_FUNC(uct_sdma_iface_t, uct_md_h md, uct_worker_h worker, c
     self->chn_id = self->cur_cpu;
     self->src_dev_idx = self->chn_id / cores_per_die;
     self->iface_creat_id = iface_creat_id;
+    self->config.bw = config->bw;
 
     shmem_msg = (sdma_shmem_msg_t *)calloc(1, sizeof(sdma_shmem_msg_t));
     status = uct_creat_shmem(SHMEM_KEY_GET(self->pid, iface_creat_id), shmem_msg);

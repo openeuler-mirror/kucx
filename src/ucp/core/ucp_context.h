@@ -169,6 +169,8 @@ typedef struct ucp_context_config {
     double                                 min_pending_time;
     /** Request timeout threshold */
     double                                 req_timeout_thresh;
+    /** If enable timeout detect in ucp_worker_progress*/
+    int                                    if_enable_timeout_detect;
 } ucp_context_config_t;
 
 

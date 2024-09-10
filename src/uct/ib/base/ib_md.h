@@ -3,6 +3,7 @@
  * Copyright (C) The University of Tennessee and The University
  *               of Tennessee Research Foundation. 2016. ALL RIGHTS RESERVED.
  *
+ * Copyright (C) Huawei Technologies Co., Ltd. 2024.  ALL RIGHTS RESERVED.
  * See file LICENSE for terms.
  */
 
@@ -99,6 +100,7 @@ typedef struct uct_ib_md_ext_config {
     size_t                   min_mt_reg;   /**< Multi-threaded registration threshold */
     size_t                   mt_reg_chunk; /**< Multi-threaded registration chunk */
     int                      mt_reg_bind;  /**< Multi-threaded registration bind to core */
+    int                      lock_free_mode;     /**< Support choose for open/close hns mode */
     unsigned                 max_idle_rkey_count; /**< Maximal number of
                                                        invalidated memory keys
                                                        that are kept idle before
@@ -165,6 +167,8 @@ typedef struct uct_ib_md {
      * be initiated.  */
     uint32_t                 flush_rkey;
     uct_ib_uint128_t         vhca_id;
+    struct ibv_td            *td;       /**< IB thread domain */
+    struct ibv_pd            *pad;       /**< IB parent domain */
 } uct_ib_md_t;
 
 
@@ -649,6 +653,9 @@ void uct_ib_md_device_context_close(struct ibv_context *ctx);
 
 uct_ib_md_t* uct_ib_md_alloc(size_t size, const char *name,
                              struct ibv_context *ctx);
+
+uct_ib_md_t* uct_ib_md_alloc_lock_free_mode(size_t size, const char *name,
+                                            struct ibv_context *ctx);                       
 
 void uct_ib_md_free(uct_ib_md_t *md);
 
