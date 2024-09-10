@@ -1,6 +1,7 @@
 /**
 * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2021. ALL RIGHTS RESERVED.
-* Copyright (C) Huawei Technologies Co., Ltd. 2021-2023. ALL RIGHTS RESERVED.
+* Copyright (C) Huawei Technologies Co., Ltd. 2021-2023.  ALL RIGHTS RESERVED.
+*
 * See file LICENSE for terms.
 */
 
@@ -473,6 +474,11 @@ UCS_CLASS_INIT_FUNC(uct_ud_iface_t, uct_ud_iface_ops_t *ops,
 
     self->rx.async_max_poll = config->rx_async_max_poll;
 
+    self->pending_time.start    = 0;
+    self->pending_time.end      = 0;
+    self->pending_time.last     = 0;
+    self->pending_time.min_tick = ucs_time_from_sec(config->min_pending_time);
+
     if (config->timer_tick <= 0.) {
         ucs_error("The timer tick should be > 0 (%lf)",
                   config->timer_tick);
@@ -643,6 +649,9 @@ ucs_config_field_t uct_ud_iface_config_table[] = {
 
     {"ASYNC_TIMER_TICK", "100ms", "Resolution for async timer",
      ucs_offsetof(uct_ud_iface_config_t, event_timer_tick), UCS_CONFIG_TYPE_TIME},
+    
+    {"MIN_PENDING_TICK", "3s", "Resolution for process pending time for schedule",
+     ucs_offsetof(uct_ud_iface_config_t, min_pending_time), UCS_CONFIG_TYPE_TIME},
 
     {"MIN_POKE_TIME", "250ms",
      "Minimal interval to send ACK request with solicited flag, to wake up\n"

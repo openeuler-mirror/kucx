@@ -35,7 +35,8 @@ typedef struct uct_sdma_req_queue {
 
 typedef struct uct_sdma_iface_config {
     uct_iface_config_t super;
-    size_t seg_size; /* Maximal send size */
+    size_t seg_size;            /* Maximal send size */
+    double bw;                  /* BW for SDMA */
 } uct_sdma_iface_config_t;
 
 typedef struct uct_sdma_iface_addr {
@@ -91,6 +92,11 @@ typedef struct uct_sdma_iface {
     sdma_shmem_msg_t *shmem_msg;
     uct_sdma_md_t *sdma_md;
     size_t send_size; /* Maximum size for payload */
+    struct {
+        size_t seg_size;    /* Maximal send size */
+        double bw;          /* BW for SDMA */
+    } config;
+    
 } uct_sdma_iface_t;
 
 int uct_sdma_iface_register_ep(uct_sdma_iface_t *iface, void *ep, progress_callback cb);
