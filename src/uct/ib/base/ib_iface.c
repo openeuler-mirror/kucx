@@ -2,7 +2,7 @@
 * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2021. ALL RIGHTS RESERVED.
 * Copyright (C) 2021 Broadcom. ALL RIGHTS RESERVED. The term "Broadcom"
 * refers to Broadcom Inc. and/or its subsidiaries.
-* Copyright (C) Huawei Technologies Co., Ltd. 2020.  ALL RIGHTS RESERVED.
+* Copyright (C) Huawei Technologies Co., Ltd. 2020-2024.  ALL RIGHTS RESERVED.
 *
 * See file LICENSE for terms.
 */
@@ -14,6 +14,7 @@
 #include "ib_iface.h"
 #include "ib_log.h"
 
+#include <uct/tcp/tcp.h>
 #include <uct/base/uct_md.h>
 #include <ucs/arch/bitops.h>
 #include <ucs/arch/cpu.h>
@@ -1040,21 +1041,34 @@ ucs_status_t uct_ib_verbs_create_cq(uct_ib_iface_t *iface, uct_ib_dir_t dir,
 {
     uct_ib_device_t *dev = uct_ib_iface_device(iface);
     unsigned cq_size     = uct_ib_cq_size(iface, init_attr, dir);
-    struct ibv_cq *cq;
-#if HAVE_DECL_IBV_CREATE_CQ_EX
+    uct_ib_md_t *md = uct_ib_iface_md(iface);
     struct ibv_cq_init_attr_ex cq_attr = {};
+    struct ibv_cq *cq;
+
+    if (md->config.lock_free_mode) {
+        cq_attr.cqe = init_attr->cq_len[dir];
+        cq_attr.cq_context = NULL;
+        cq_attr.channel = iface->comp_channel;
+        cq_attr.comp_vector = preferred_cpu;
+        cq_attr.parent_domain = md->pd;
+        cq_attr.comp_mask = IBV_CQ_INIT_ATTR_MASK_PD;
+        iface->config.max_inl_cqe[dir] = 0;
+
+        cq = ibv_cq_ex_to_cq(ibv_create_cq_ex(dev->ibv_context, &cq_attr));
+    } else {
+#if HAVE_DECL_IBV_CREATE_CQ_EX
 
     uct_ib_fill_cq_attr(&cq_attr, init_attr, iface, preferred_cpu, cq_size);
 
     cq = ibv_cq_ex_to_cq(ibv_create_cq_ex(dev->ibv_context, &cq_attr));
     if (!cq && ((errno == EOPNOTSUPP) || (errno == ENOSYS)))
 #endif
-    {
-        iface->config.max_inl_cqe[dir] = 0;
-        cq = ibv_create_cq(dev->ibv_context, cq_size, NULL, iface->comp_channel,
-                           preferred_cpu);
+        {
+            iface->config.max_inl_cqe[dir] = 0;
+            cq = ibv_create_cq(dev->ibv_context, cq_size, NULL, iface->comp_channel,
+                            preferred_cpu);
+        }
     }
-
     if (cq == NULL) {
         uct_ib_check_memlock_limit_msg(UCS_LOG_LEVEL_ERROR,
                                        "ibv_create_cq(cqe=%d)", cq_size);
@@ -1138,6 +1152,7 @@ uct_ib_iface_init_roce_addr_prefix(uct_ib_iface_t *iface,
     uct_ib_device_gid_info_t *gid_info = &iface->gid_info;
     size_t addr_size, max_prefix_bits;
     struct sockaddr_storage mask;
+    struct sockaddr_storage ifaddr;
     char ndev_name[IFNAMSIZ];
     const void *mask_addr;
     ucs_status_t status;
@@ -1184,8 +1199,8 @@ uct_ib_iface_init_roce_addr_prefix(uct_ib_iface_t *iface,
         goto out_mask_info_failed;
     }
 
-    status = ucs_netif_get_addr(ndev_name, AF_UNSPEC, NULL,
-                                (struct sockaddr*)&mask);
+    status = uct_tcp_netif_inaddr(ndev_name, (struct sockaddr_in*)&ifaddr,
+                                  (struct sockaddr_in*)&mask);
     if (status != UCS_OK) {
         goto out_mask_info_failed;
     }
