@@ -9,7 +9,7 @@ libuct_sdma_la_CFLAGS   = $(BASE_CFLAGS) $(SDMA_CPPFLAGS)
 libuct_sdma_la_CPPFLAGS = $(BASE_CPPFLAGS) $(SDMA_CPPFLAGS)
 libuct_sdma_la_LIBADD   = $(top_builddir)/src/ucs/libucs.la \
                           $(top_builddir)/src/uct/libuct.la
-libuct_sdma_la_LDFLAGS  = $(SDMA_LDFLAGS) $(SEC_LDFLAGS) -lsdma
+libuct_sdma_la_LDFLAGS  = $(SDMA_LDFLAGS) $(SEC_LDFLAGS) -lsdma_dk
 noinst_HEADERS = \
         sdma_iface.h \
         sdma_ep.h \

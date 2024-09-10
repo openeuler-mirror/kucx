@@ -2,6 +2,7 @@
  * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2020. ALL RIGHTS RESERVED.
  * Copyright (C) The University of Tennessee and The University
  *               of Tennessee Research Foundation. 2016. ALL RIGHTS RESERVED.
+ * Copyright (C) Huawei Technologies Co., Ltd. 2024.  ALL RIGHTS RESERVED.
  *
  * See file LICENSE for terms.
  */
@@ -178,6 +179,13 @@ static ucs_config_field_t uct_ib_md_config_table[] = {
     {"MAX_IDLE_RKEY_COUNT", "16",
      "Maximal number of invalidated memory keys that are kept idle before reuse.",
      ucs_offsetof(uct_ib_md_config_t, ext.max_idle_rkey_count), UCS_CONFIG_TYPE_UINT},
+
+    {"LOCK_FREE_MODE", "n",
+     "Enable rc/ud lock-free mode on hns device: n -> close, y -> open.\n"
+     "1.Lock-free mode can be enabled only on hns device. "
+     "Otherwise, some unpredictable errors may occur.\n"
+     "2.Lock-free mode is only recommended to be enabled in non-multi-thread scenarios.\n",
+     ucs_offsetof(uct_ib_md_config_t, ext.lock_free_mode), UCS_CONFIG_TYPE_BOOL},
 
     {NULL}
 };
@@ -1702,6 +1710,51 @@ void uct_ib_md_device_context_close(struct ibv_context *ctx)
     }
 }
 
+uct_ib_md_t* uct_ib_md_alloc_lock_free_mode(size_t size, const char *name,
+                                            struct ibv_context *ctx)
+{
+    uct_ib_md_t *md;
+    struct ibv_parent_domain_init_attr pad_attr = {0};
+    struct ibv_td_init_attr td_attr = {0};
+    struct ibv_pd *temp;
+
+    md = ucs_calloc(1, size, name);
+    if (md == NULL) {
+        ucs_error("failed to allocate memory for md");
+        goto err;
+    }
+
+    md->dev.ibv_context = ctx;
+    md->pd              = ibv_alloc_pd(md->dev.ibv_context);
+    if (md->pd == NULL) {
+        ucs_error("ibv_alloc_pd() failed: %m");
+        goto err_md_free;
+    }
+    md->td = ibv_alloc_td(md->dev.ibv_context, &td_attr);
+    if (md->td == NULL) {
+        ucs_error("ibv_alloc_td() failed: %m");
+        goto err_md_free;
+    }
+    pad_attr.pd = md->pd;
+    pad_attr.td = md->td;
+    pad_attr.comp_mask = 0;
+
+    md->pad = ibv_alloc_parent_domain(md->dev.ibv_context, &pad_attr);
+    if (md->pad == NULL) {
+        ucs_error("ibv_alloc_parent_domain() failed: %m");
+        goto err_md_free;
+    }
+    temp = md->pd;
+    md->pd = md->pad;
+    md->pad = temp;
+    return md;
+
+err_md_free:
+    ucs_free(md);
+err:
+    return NULL;
+}
+
 uct_ib_md_t* uct_ib_md_alloc(size_t size, const char *name,
                              struct ibv_context *ctx)
 {
@@ -1731,7 +1784,15 @@ err:
 void uct_ib_md_free(uct_ib_md_t *md)
 {
     int ret;
+    struct ibv_pd *temp;
 
+    if (md->config.lock_free_mode) {
+        temp = md->pd;
+        md->pd = md->pad;
+        md->pad = temp;
+        ibv_dealloc_pd(md->pad);
+        ibv_dealloc_td(md->td);
+    }
     ret = ibv_dealloc_pd(md->pd);
     /* Do not print a warning if PD deallocation failed with EINVAL, because
      * it fails from time to time on BF/ARM (TODO: investigate) */
@@ -1816,7 +1877,9 @@ static ucs_status_t uct_ib_verbs_md_open(struct ibv_device *ibv_device,
         goto err;
     }
 
-    md = uct_ib_md_alloc(sizeof(*md), "ib_mlx5_devx_md", ctx);
+    md = md_config->ext.lock_free_mode ?
+         uct_ib_md_alloc_lock_free_mode(sizeof(*md), "ib_verbs_md", ctx) :
+         uct_ib_md_alloc(sizeof(*md), "ib_verbs_md", ctx);
     if (md == NULL) {
         status = UCS_ERR_NO_MEMORY;
         goto err_free_context;

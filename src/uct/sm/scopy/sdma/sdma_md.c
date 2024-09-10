@@ -14,10 +14,10 @@ ucs_config_field_t uct_sdma_md_config_table[] = {
 
     {"", "", NULL, ucs_offsetof(uct_sdma_md_config_t, super), UCS_CONFIG_TYPE_TABLE(uct_md_config_table)},
 
-    {"SDMA_DEV_NAME_LEN", "20", "Size of sdma device's name", ucs_offsetof(uct_sdma_md_config_t, dev_name_len),
+    {"DEV_NAME_LEN", "20", "Size of sdma device's name", ucs_offsetof(uct_sdma_md_config_t, dev_name_len),
         UCS_CONFIG_TYPE_INT},
 
-    {"SDMA_DEV_MAXNUM", "4", "Sdma device's number", ucs_offsetof(uct_sdma_md_config_t, dev_num),
+    {"DEV_MAXNUM", "4", "Sdma device's number", ucs_offsetof(uct_sdma_md_config_t, dev_num),
         UCS_CONFIG_TYPE_INT},
 
     {NULL}

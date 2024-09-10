@@ -2951,6 +2951,7 @@ unsigned ucp_worker_progress(ucp_worker_h worker)
 {
     unsigned count;
     static uint32_t timeout_check_count = 0;
+    int detect_flag = worker->context->config.ext.if_enable_timeout_detect;
 
     /* worker->inprogress is used only for assertion check.
      * coverity[assert_side_effect]
@@ -2960,9 +2961,11 @@ unsigned ucp_worker_progress(ucp_worker_h worker)
     /* check that ucp_worker_progress is not called from within ucp_worker_progress */
     ucs_assert(worker->inprogress++ == 0);
     count = uct_worker_progress(worker->uct);
-    if (++timeout_check_count % 1000 == 0) {
-        timeout_check_count = 0;
-        ucp_worker_check_timeout(worker, count);
+    if (detect_flag) {
+        if (++timeout_check_count % 1000 == 0) {
+            timeout_check_count = 0;
+            ucp_worker_check_timeout(worker, count);
+        }
     }
     ucs_async_check_miss(&worker->async);
 
