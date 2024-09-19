@@ -552,7 +552,7 @@ void ucp_memory_detect_slowpath(ucp_context_h context, const void *address,
 static UCS_F_ALWAYS_INLINE
 double ucp_calc_epsilon(double val1, double val2)
 {
-    return (val1 + val2) * (1e-6);
+    return (val1 + val2) * (1e-8);
 }
 
 /**
@@ -578,6 +578,25 @@ int ucp_score_prio_cmp(double score1, int prio1, double score2, int prio2)
     int score_res = ucp_score_cmp(score1, score2);
 
     return score_res ? score_res : ucs_signum(prio1 - prio2);
+}
+
+static UCS_F_ALWAYS_INLINE
+int ucp_score_prio_inj_cmp(double score1, int prio1, int32_t inj1, uint64_t uuid_inj1,
+                           double score2, int prio2, int32_t inj2, uint64_t uuid_inj2)
+{
+    int result;
+    int score_res, prio_res, inj_res, uuid_res;
+    score_res = ucp_score_cmp(score1, score2);
+    prio_res = ucs_signum(prio1 - prio2);
+    inj_res = ucs_signum(inj2 - inj1);
+    uuid_res = (uuid_inj1 == uuid_inj2) ? 0 : (uuid_inj1 > uuid_inj2 ? 1 : -1);
+
+    result = uuid_res;
+    result = inj_res ? inj_res : result;
+    result = prio_res ? prio_res : result;
+    result = score_res ? score_res : result;
+
+    return result;
 }
 
 static UCS_F_ALWAYS_INLINE
