@@ -168,7 +168,7 @@ typedef struct uct_ib_md {
     uint32_t                 flush_rkey;
     uct_ib_uint128_t         vhca_id;
     struct ibv_td            *td;       /**< IB thread domain */
-    struct ibv_pd            *pad;       /**< IB parent domain */
+    struct ibv_pd            *pad;      /**< IB parent domain */
 } uct_ib_md_t;
 
 
@@ -655,7 +655,7 @@ uct_ib_md_t* uct_ib_md_alloc(size_t size, const char *name,
                              struct ibv_context *ctx);
 
 uct_ib_md_t* uct_ib_md_alloc_lock_free_mode(size_t size, const char *name,
-                                            struct ibv_context *ctx);                       
+                                            struct ibv_context *ctx);
 
 void uct_ib_md_free(uct_ib_md_t *md);
 

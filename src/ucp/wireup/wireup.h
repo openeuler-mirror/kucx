@@ -1,5 +1,6 @@
 /**
  * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2015. ALL RIGHTS RESERVED.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
  *
  * See file LICENSE for terms.
  */
@@ -133,6 +134,8 @@ typedef struct {
     unsigned        path_index;
     ucp_rsc_index_t rsc_index;
     uint8_t         priority;
+    int32_t         inj_val;
+    uint64_t        uuid_inj_val;
 } ucp_wireup_select_info_t;
 
 

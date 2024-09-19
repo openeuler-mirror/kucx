@@ -259,7 +259,7 @@ static ucs_config_field_t ucp_context_config_table[] = {
    "Request timeout threshold",
    ucs_offsetof(ucp_context_config_t, req_timeout_thresh), UCS_CONFIG_TYPE_TIME},
 
-    {"TIMEOUT_DETECT_ENABLE", "y",
+  {"TIMEOUT_DETECT_ENABLE", "y",
    "n       - Disable the timeout detection function in ucp_worker_progress.\n"
    "y       - Enable the timeout detection function in ucp_worker_progress.\n",
    ucs_offsetof(ucp_context_config_t, if_enable_timeout_detect), UCS_CONFIG_TYPE_BOOL},

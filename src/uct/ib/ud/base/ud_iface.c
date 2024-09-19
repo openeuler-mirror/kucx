@@ -74,12 +74,12 @@ uct_ud_iface_cep_get_conn_sn(uct_ud_iface_t *iface,
 {
     void *peer_address = ucs_alloca(iface->conn_match_ctx.address_length);
     ucs_status_t status;
-    
+
     status = uct_ud_iface_cep_get_peer_address(iface, ib_addr, if_addr,
                                                path_index, peer_address);
     if (status != UCS_OK) {
         return status;
-    } 
+    }
 
     *conn_sn_p = ucs_conn_match_get_next_sn(&iface->conn_match_ctx,
                                             peer_address);
@@ -650,6 +650,9 @@ ucs_config_field_t uct_ud_iface_config_table[] = {
     {"ASYNC_TIMER_TICK", "100ms", "Resolution for async timer",
      ucs_offsetof(uct_ud_iface_config_t, event_timer_tick), UCS_CONFIG_TYPE_TIME},
     
+    {"MIN_PENDING_TICK", "3s", "Resolution for process pending time for schedule",
+     ucs_offsetof(uct_ud_iface_config_t, min_pending_time), UCS_CONFIG_TYPE_TIME},
+
     {"MIN_PENDING_TICK", "3s", "Resolution for process pending time for schedule",
      ucs_offsetof(uct_ud_iface_config_t, min_pending_time), UCS_CONFIG_TYPE_TIME},
 

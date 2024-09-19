@@ -1,6 +1,7 @@
 /**
  * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2016. ALL RIGHTS RESERVED.
  * Copyright (C) Los Alamos National Security, LLC. 2019 ALL RIGHTS RESERVED.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
  *
  * See file LICENSE for terms.
  */
@@ -365,6 +366,29 @@ static size_t ucp_wireup_max_lanes(ucp_lane_type_t lane_type)
                    UCP_MAX_LANES;
 }
 
+/*
+ * Cantor pairing function
+ * for x, y  {R}
+ * f(x1, y1) == f(y1, x1)
+ * x1 != x2 || y1 != y2: f(x1, y1) != f(x2, y2)
+ */
+static int32_t ucp_injection_value(uint8_t x, uint8_t y)
+{
+   int32_t k1, k2;
+   k1 = ucs_max(x, y);
+   k2 = ucs_min(x, y);
+   return (k1 + k2) * (k1 + k2 + 1) / 2 + k2;
+}
+
+/*
+ * uuid_x, uuid_y are constants in function f(x, y)
+ * f(x1, y1) != f(y1, x1)
+ */
+static uint64_t ucp_uuid_injection_value(uint64_t uuid_x, uint8_t md_idx_x, uint64_t uuid_y, uint8_t md_idx_y)
+{
+    return (uuid_x * md_idx_x) + (uuid_y * md_idx_y);
+}
+
 /**
  * Select a local and remote transport
  */
@@ -404,7 +428,11 @@ static UCS_F_NOINLINE ucs_status_t ucp_wireup_select_transport(
     int is_reachable;
     double score;
     uint8_t priority;
+    int32_t inj_val;
+    uint64_t uuid_inj_val;
     ucp_md_index_t md_index;
+    uint64_t local_uuid = select_params->ep->worker->uuid;
+    uint64_t remote_uuid = select_params->address->uuid;
 
     p            = tls_info;
     endp         = tls_info + sizeof(tls_info) - 1;
@@ -592,17 +620,21 @@ static UCS_F_NOINLINE ucs_status_t ucp_wireup_select_transport(
             score        = criteria->calc_score(wiface, md_attr, ae,
                                                 criteria->arg);
             priority     = iface_attr->priority + ae->iface_attr.priority;
+            inj_val      = ucp_injection_value(md_index, ae->md_index);
+            uuid_inj_val = ucp_uuid_injection_value(local_uuid, md_index, remote_uuid, ae->md_index);
             is_reachable = 1;
 
             ucs_trace(UCT_TL_RESOURCE_DESC_FMT
-                      "->addr[%u] : %s score %.2f priority %d",
+                      "->addr[%u] : %s score %.10lf priority %d inj_val %u uuid_inj_val %lu",
                       UCT_TL_RESOURCE_DESC_ARG(resource),
-                      addr_index, criteria->title, score, priority);
+                      addr_index, criteria->title, score, priority, inj_val, uuid_inj_val);
 
-            if (!found || (ucp_score_prio_cmp(score, priority, sinfo.score,
-                                              sinfo.priority) > 0)) {
+            if (!found || (ucp_score_prio_inj_cmp(score, priority, inj_val, uuid_inj_val,
+                                                  sinfo.score, sinfo.priority, sinfo.inj_val, sinfo.uuid_inj_val) > 0)) {
                 ucp_wireup_init_select_info(score, addr_index, rsc_index,
                                             priority, &sinfo);
+                sinfo.inj_val = inj_val;
+                sinfo.uuid_inj_val = uuid_inj_val;
                 found = 1;
             }
         }
@@ -634,13 +666,13 @@ out:
     }
 
     ucs_trace("ep %p: selected for %s: " UCT_TL_RESOURCE_DESC_FMT " md[%d]"
-              " -> '%s' address[%d],md[%d],rsc[%u] score %.2f",
+              " -> '%s' address[%d],md[%d],rsc[%u] score %f inj_val %u uuid_inj_val %lu",
               ep, criteria->title,
               UCT_TL_RESOURCE_DESC_ARG(&context->tl_rscs[sinfo.rsc_index].tl_rsc),
               context->tl_rscs[sinfo.rsc_index].md_index, ucp_ep_peer_name(ep),
               sinfo.addr_index, address->address_list[sinfo.addr_index].md_index,
               address->address_list[sinfo.addr_index].iface_attr.dst_rsc_index,
-              sinfo.score);
+              sinfo.score, sinfo.inj_val, sinfo.uuid_inj_val);
 
     *select_info = sinfo;
     return UCS_OK;

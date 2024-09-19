@@ -96,7 +96,6 @@ typedef struct uct_sdma_iface {
         size_t seg_size;    /* Maximal send size */
         double bw;          /* BW for SDMA */
     } config;
-    
 } uct_sdma_iface_t;
 
 int uct_sdma_iface_register_ep(uct_sdma_iface_t *iface, void *ep, progress_callback cb);
