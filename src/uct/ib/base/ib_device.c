@@ -879,15 +879,44 @@ ucs_status_t uct_ib_device_select_gid(uct_ib_device_t *dev, uint8_t port_num,
     int gid_tbl_len         = uct_ib_device_port_attr(dev, port_num)->gid_tbl_len;
     ucs_status_t status     = UCS_OK;
     int priorities_arr_len  = ucs_static_array_size(roce_prio);
+#if !HAVE_IBV_QUERY_GID_TABLE
     uct_ib_device_gid_info_t gid_info_tmp;
+#else
+    ssize_t valid_gid_tbl_len = -1;
+    struct ibv_gid_entry *entries = NULL, *gid_entry = NULL;
+    sa_family_t tmp_family;
+#endif
     int i, prio_idx;
 
     ucs_assert(uct_ib_device_is_port_roce(dev, port_num));
+
+#if HAVE_IBV_QUERY_GID_TABLE
+    if (gid_tbl_len == 0) {
+        goto skip_malloc;
+    }
+
+    entries = ucs_malloc(sizeof(*entries) * gid_tbl_len, "ibv_gid_entry array");
+    if (entries == NULL) {
+        ucs_error("failed to allocate gid entry");
+        return UCS_ERR_NO_MEMORY;
+    }
+
+    valid_gid_tbl_len = ibv_query_gid_table(dev->ibv_context, entries, gid_tbl_len, 0);
+    if (valid_gid_tbl_len < 0) {
+        ucs_error("failed to query gid table for device %s, ret %ld",
+                   uct_ib_device_name(dev), valid_gid_tbl_len);
+        ucs_free(entries);
+        return UCS_ERR_INVALID_PARAM;
+    }
+
+skip_malloc:
+#endif
 
     /* search for matching GID table entries, according to the order defined
      * in priorities array
      */
     for (prio_idx = 0; prio_idx < priorities_arr_len; prio_idx++) {
+#if !HAVE_IBV_QUERY_GID_TABLE
         for (i = 0; i < gid_tbl_len; i++) {
             status = uct_ib_device_query_gid_info(dev->ibv_context,
                                                   uct_ib_device_name(dev),
@@ -905,6 +934,31 @@ ucs_status_t uct_ib_device_select_gid(uct_ib_device_t *dev, uint8_t port_num,
                 goto out_print;
             }
         }
+#else
+        for (i = 0; i < valid_gid_tbl_len; ++i) {
+            gid_entry = &entries[i];
+            ucs_assert(gid_entry != NULL);
+
+            if (!((roce_prio[prio_idx].ver == UCT_IB_DEVICE_ROCE_V1 && gid_entry->gid_type == IBV_GID_TYPE_ROCE_V1) ||
+                  (roce_prio[prio_idx].ver == UCT_IB_DEVICE_ROCE_V2 && gid_entry->gid_type == IBV_GID_TYPE_ROCE_V2))) {
+                continue;
+            }
+
+            tmp_family = uct_ib_device_get_addr_family(&gid_entry->gid, gid_entry->gid_index);
+            if ((roce_prio[prio_idx].addr_family == tmp_family) &&
+                uct_ib_device_test_roce_gid_index(dev, port_num, &gid_entry->gid, i)) {
+                gid_info->gid_index = i;
+                gid_info->roce_info.ver = (gid_entry->gid_type == IBV_GID_TYPE_ROCE_V1) ? UCT_IB_DEVICE_ROCE_V1 : UCT_IB_DEVICE_ROCE_V2;
+                gid_info->roce_info.addr_family = tmp_family;
+                ucs_free(entries);
+                goto out_print;
+            }
+        }
+
+        if (gid_tbl_len != 0) {
+            ucs_free(entries);
+        }
+#endif
     }
 
     gid_info->gid_index             = UCT_IB_MD_DEFAULT_GID_INDEX;

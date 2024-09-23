@@ -357,7 +357,12 @@ static ucs_status_t uct_ud_iface_gid_hash_init(uct_ud_iface_t *iface,
     static const union ibv_gid zero_gid = { .raw = {0} };
     uct_ib_device_t *dev                = &ucs_derived_of(md, uct_ib_md_t)->dev;
     int port                            = iface->super.config.port_num;
+#if !HAVE_IBV_QUERY_GID_TABLE
     uct_ib_device_gid_info_t gid_info;
+#else
+    ssize_t valid_gid_tbl_len;
+    struct ibv_gid_entry *entries, *gid_entry;
+#endif
     int gid_idx, gid_tbl_len, kh_ret;
     ucs_status_t status;
     char gid_str[128];
@@ -365,6 +370,8 @@ static ucs_status_t uct_ud_iface_gid_hash_init(uct_ud_iface_t *iface,
     kh_init_inplace(uct_ud_iface_gid, &iface->gid_table.hash);
 
     gid_tbl_len = uct_ib_device_port_attr(dev, port)->gid_tbl_len;
+
+#if !HAVE_IBV_QUERY_GID_TABLE
     for (gid_idx = 0; gid_idx < gid_tbl_len; ++gid_idx) {
         status = uct_ib_device_query_gid_info(dev->ibv_context,
                                               uct_ib_device_name(dev),
@@ -390,6 +397,51 @@ static ucs_status_t uct_ud_iface_gid_hash_init(uct_ud_iface_t *iface,
             goto err;
         }
     }
+#else
+    if (gid_tbl_len == 0) {
+        goto out;
+    }
+
+    entries = ucs_malloc(sizeof(*entries) * gid_tbl_len, "ibv_gid_entry array");
+    if (entries == NULL) {
+        ucs_error("failed to allocate gid entry");
+        return UCS_ERR_NO_MEMORY;
+    }
+
+    valid_gid_tbl_len = ibv_query_gid_table(dev->ibv_context, entries, gid_tbl_len, 0);
+    if (valid_gid_tbl_len < 0) {
+        ucs_error("failed to query gid table for device %s, ret %ld",
+                   uct_ib_device_name(dev), valid_gid_tbl_len);
+        ucs_free(entries);
+        return UCS_ERR_INVALID_PARAM;
+    }
+
+    for (gid_idx = 0; gid_idx < valid_gid_tbl_len; ++gid_idx) {
+        gid_entry = &entries[gid_idx];
+        ucs_assert(gid_entry != NULL);
+
+        if (!memcmp(&gid_entry->gid, &zero_gid, sizeof(zero_gid))) {
+            continue;
+        }
+
+        ucs_debug("iface %p: adding gid %s to hash on device %s port %d index "
+                  "%d valid_gid_tbl_len %ld)", iface, uct_ib_gid_str(&gid_entry->gid, gid_str, sizeof(gid_str)),
+                  uct_ib_device_name(dev), port, gid_entry->gid_index, valid_gid_tbl_len);
+        kh_put(uct_ud_iface_gid, &iface->gid_table.hash, entries[gid_idx].gid,
+               &kh_ret);
+        if (kh_ret < 0) {
+            ucs_error("failed to add gid to hash on device %s port %d index %d",
+                      uct_ib_device_name(dev), port, gid_entry->gid_index);
+            status = UCS_ERR_NO_MEMORY;
+            ucs_free(entries);
+            goto err;
+        }
+    }
+
+    ucs_free(entries);
+
+out:
+#endif
 
     iface->gid_table.last     = zero_gid;
     iface->gid_table.last_len = sizeof(zero_gid);
@@ -650,9 +702,6 @@ ucs_config_field_t uct_ud_iface_config_table[] = {
     {"ASYNC_TIMER_TICK", "100ms", "Resolution for async timer",
      ucs_offsetof(uct_ud_iface_config_t, event_timer_tick), UCS_CONFIG_TYPE_TIME},
     
-    {"MIN_PENDING_TICK", "3s", "Resolution for process pending time for schedule",
-     ucs_offsetof(uct_ud_iface_config_t, min_pending_time), UCS_CONFIG_TYPE_TIME},
-
     {"MIN_PENDING_TICK", "3s", "Resolution for process pending time for schedule",
      ucs_offsetof(uct_ud_iface_config_t, min_pending_time), UCS_CONFIG_TYPE_TIME},
 
