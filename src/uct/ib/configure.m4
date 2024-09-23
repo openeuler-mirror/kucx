@@ -219,6 +219,14 @@ AS_IF([test "x$with_ib" = "xyes"],
                             [have upstream ibv_query_device_ex])])],
                             [], [[#include <infiniband/verbs.h>]])
 
+       # We could use ibv_query_gid_table to quickly get gids information
+       AC_CHECK_DECL(ibv_query_gid_table, [
+       AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <infiniband/verbs.h>]],
+                         [[ibv_query_gid_table(NULL, NULL, NULL, NULL)]])],
+                         [AC_DEFINE([HAVE_IBV_QUERY_GID_TABLE], 1,
+                             [use ibv_query_gid_table])])],
+                             [], [[#include <infiniband/verbs.h>]])
+
        AC_CHECK_MEMBERS([struct ibv_device_attr_ex.pci_atomic_caps],
                         [], [], [[#include <infiniband/verbs.h>]])
 
