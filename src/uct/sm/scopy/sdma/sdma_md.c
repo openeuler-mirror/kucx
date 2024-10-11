@@ -137,51 +137,18 @@ ucs_status_t uct_sdma_mem_alloc(uct_md_h tl_md, size_t *length_p, void **address
 ucs_status_t uct_sdma_mem_free(uct_md_h md, uct_mem_h memh)
 {
     uct_sdma_key_t *sdma_memh = memh;
-    uct_sdma_md_t *sdma_md = ucs_derived_of(md, uct_sdma_md_t);
-    ucs_status_t status = UCS_OK;
-
-    if (sdma_md->sdma_fd[0] < 0 || sdma_md->pin_umem_cb == NULL) {
-        return UCS_ERR_IO_ERROR;
+    ucs_status_t status;
+    if (sdma_memh == NULL || sdma_memh->address == NULL) {
+        return UCS_ERR_NO_MEMORY;
     }
-    if (uct_exec_pin_flag) {
-        status = (ucs_status_t)sdma_md->unpin_umem_cb(sdma_md->sdma_fd[0], sdma_memh->cookie);
-        if (status != UCS_OK) {
-            ucs_error("sdma_unpin_umem failed , status is %d.", status);
-            return UCS_ERR_IO_ERROR;
-        }
-    } else {
-        ucs_debug("temp not exec uct_sdma_mem_dereg");
+    status = uct_sdma_mem_dereg(md,memh);
+    if (status != UCS_OK) {
+        ucs_error("Failed to unpinned memory for sdma_mem_addr");
+        return status;
     }
     ucs_free(sdma_memh->address);
     ucs_free(sdma_memh);
     return UCS_OK;
-}
-
-int get_cores_per_socket(void)
-{
-    int cores_num = sysconf(_SC_NPROCESSORS_CONF);
-    char prev_ctx[PATH_CTX_SIZE] = {0};
-    char curr_ctx[PATH_CTX_SIZE] = {0};
-    int cores_per_skt = 0;
-    int sockets_num = 0;
-    ssize_t ret;
-
-    for (int i = 0; i < cores_num; i++) {
-        ret = ucs_read_file(curr_ctx, sizeof(curr_ctx)-1, 1, PATH_SYS_CPU,i);
-        curr_ctx[ret] = '\0';
-
-        /* There's no such situation that num1 is different from num2, but same as num3. */
-        if (strcmp(curr_ctx, prev_ctx) != 0) {
-            sockets_num++;
-        }
-        strcpy(prev_ctx, curr_ctx);
-    }
-
-    if (sockets_num <= 0) {
-        return UCS_ERR_IO_ERROR;
-    }
-
-    return cores_per_skt = cores_num / sockets_num;
 }
 
 static uct_md_ops_t uct_sdma_md_ops = {

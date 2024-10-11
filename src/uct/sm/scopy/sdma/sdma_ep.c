@@ -337,7 +337,7 @@ ucs_status_t uct_sdma_ep_put_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, size_t 
     }
 
     ucs_info("sdma: ep[%d->%d] uct_sdma_ep_put_zcopy, iov cnt = %lu, length = %lu", ep->local_ifaceid,
-        ep->remote_ifaceid, iov_cnt, length);
+             ep->remote_ifaceid, iov_cnt, length);
 
     buffer = (uint64_t)uct_iov_get_buffer(&iov[0]);
 
