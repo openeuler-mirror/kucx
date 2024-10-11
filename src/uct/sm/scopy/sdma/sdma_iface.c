@@ -192,10 +192,10 @@ static unsigned uct_sdma_iface_progress(uct_iface_h tl_iface)
 
             if (am_short_bit) {
                 status = uct_iface_invoke_am(&iface->super, id, header,
-                    length + sizeof(sdma_shmem_field->am_desc[k].am_field.header), 0);
+                         length + sizeof(sdma_shmem_field->am_desc[k].am_field.header), 0);
             } else {
                 status = uct_iface_invoke_am(&iface->super, id, (void *)sdma_shmem_field->am_desc[k].am_field.buff,
-                    length, UCT_CB_PARAM_FLAG_DESC);
+                         length, UCT_CB_PARAM_FLAG_DESC);
             }
 
             memset(&sdma_shmem_field->am_desc[k], 0x0, sizeof(sdma_am_desc_t));
@@ -252,8 +252,6 @@ static UCS_CLASS_INIT_FUNC(uct_sdma_iface_t, uct_md_h md, uct_worker_h worker, c
 {
     sdma_shmem_msg_t *shmem_msg;
     ucs_status_t status;
-    int cores_per_skt;
-    int cores_per_die;
     int pasid;
     uct_sdma_iface_config_t *config = ucs_derived_of(tl_config, uct_sdma_iface_config_t);
 
@@ -267,17 +265,15 @@ static UCS_CLASS_INIT_FUNC(uct_sdma_iface_t, uct_md_h md, uct_worker_h worker, c
         return UCS_ERR_NO_MEMORY;
     }
 
-    cores_per_skt = get_cores_per_socket();
-    if (cores_per_skt < 0) {
-        ucs_error("Failed to get_cores_per_socket");
-        return UCS_ERR_IO_ERROR;
-    }
-
-    cores_per_die = cores_per_skt / DIE_NUM_PER_SOCKET;
     self->pid = (int)getpid();
     self->cur_cpu = sched_getcpu();
     self->chn_id = self->cur_cpu;
-    self->src_dev_idx = self->chn_id / cores_per_die;
+    self->src_dev_idx = sdma_nearest_id();
+    if (self->src_dev_idx < 0) {
+        ucs_error("Failed to get nearest sdma id");
+        return UCS_ERR_IO_ERROR;
+    }
+
     self->iface_creat_id = iface_creat_id;
     self->config.bw = config->bw;
 

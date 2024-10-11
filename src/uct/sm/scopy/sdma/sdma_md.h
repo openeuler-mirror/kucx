@@ -30,8 +30,8 @@ typedef struct uct_sdma_md {
 
 typedef struct uct_sdma_md_config {
     uct_md_config_t super;
-    uint16_t dev_name_len;
-    uint16_t dev_num;
+    uint32_t dev_name_len;
+    uint32_t dev_num;
 } uct_sdma_md_config_t;
 
 typedef struct uct_sdma_key {
@@ -51,6 +51,5 @@ ucs_status_t uct_sdma_mem_reg(uct_md_h md, void *address, size_t length, const u
 ucs_status_t uct_sdma_mem_dereg(uct_md_h md, const uct_md_mem_dereg_params_t *params);
 
 void uct_sdma_md_close(uct_md_h md);
-int get_cores_per_socket(void);
 
 #endif
