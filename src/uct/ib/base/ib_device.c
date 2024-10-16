@@ -954,12 +954,14 @@ skip_malloc:
                 goto out_print;
             }
         }
-
-        if (gid_tbl_len != 0) {
-            ucs_free(entries);
-        }
 #endif
     }
+
+#if HAVE_IBV_QUERY_GID_TABLE
+    if (gid_tbl_len != 0) {
+        ucs_free(entries);
+    }
+#endif
 
     gid_info->gid_index             = UCT_IB_MD_DEFAULT_GID_INDEX;
     gid_info->roce_info.ver         = UCT_IB_DEVICE_ROCE_V1;
