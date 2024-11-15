@@ -41,6 +41,7 @@ noinst_HEADERS = \
 	core/ucp_thread.h \
 	core/ucp_types.h \
 	core/ucp_vfs.h \
+    core/ucp_failover.h \
 	dt/datatype_iter.h \
 	dt/datatype_iter.inl \
 	dt/dt.h \
@@ -113,6 +114,7 @@ libucp_la_SOURCES = \
 	core/ucp_version.c \
 	core/ucp_vfs.c \
 	core/ucp_worker.c \
+    core/ucp_failover.c \
 	dt/datatype_iter.c \
 	dt/dt_contig.c \
 	dt/dt_iov.c \

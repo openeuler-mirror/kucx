@@ -23,7 +23,7 @@ ucs_status_t ucp_amo_check_send_status(ucp_request_t *req, ucs_status_t status)
         return UCS_OK;
     }
     /* Complete for UCS_OK and unexpected errors */
-    if (status != UCS_ERR_NO_RESOURCE) {
+    if (status != UCS_ERR_NO_RESOURCE && status != UCS_ERR_BUSY) {
         ucp_request_complete_send(req, status);
         return UCS_OK;
     }

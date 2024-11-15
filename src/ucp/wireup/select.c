@@ -374,10 +374,10 @@ static size_t ucp_wireup_max_lanes(ucp_lane_type_t lane_type)
  */
 static int32_t ucp_injection_value(uint8_t x, uint8_t y)
 {
-   int32_t k1, k2;
-   k1 = ucs_max(x, y);
-   k2 = ucs_min(x, y);
-   return (k1 + k2) * (k1 + k2 + 1) / 2 + k2;
+    int32_t k1, k2;
+    k1 = ucs_max(x, y);
+    k2 = ucs_min(x, y);
+    return (k1 + k2) * (k1 + k2 + 1) / 2 + k2;
 }
 
 /*
@@ -614,6 +614,16 @@ static UCS_F_NOINLINE ucs_status_t ucp_wireup_select_transport(
             if (!ucp_wireup_is_reachable(ep, select_params->ep_init_flags,
                                          rsc_index, ae)) {
                 /* Must be reachable device address, on same transport */
+                continue;
+            }
+
+            /* 
+             * for processes on the same node,
+             * device loopback performance is better and fault tolerance is higher.
+             */
+            if (worker->context->config.ext.local_conn_same_dev &&
+                worker->machine_id == address->machine_id &&
+                md_index != ae->md_index) {
                 continue;
             }
 
@@ -2362,6 +2372,11 @@ ucp_wireup_select_lanes(ucp_ep_h ep, unsigned ep_init_flags,
     ucp_wireup_select_params_t select_params;
     ucs_status_t status;
 
+    if (ep->flags & UCP_EP_FLAG_REMOTE_CONNECTED) {
+        /* when aux connectiong is faulty, no need blacklist in case of lane-reconfig confliction */
+        tl_bitmap = UCP_TL_BITMAP_AND_NOT(tl_bitmap, worker->discard_tl_bitmap);
+    }
+
     UCS_BITMAP_AND_INPLACE(&scalable_tl_bitmap, tl_bitmap);
 
     if (!UCS_BITMAP_IS_ZERO_INPLACE(&scalable_tl_bitmap)) {
@@ -2413,10 +2428,34 @@ ucp_wireup_select_aux_transport(ucp_ep_h ep, unsigned ep_init_flags,
     ucp_wireup_criteria_t criteria         = {};
     ucp_wireup_select_params_t select_params;
 
+    tl_bitmap = UCP_TL_BITMAP_AND_NOT(tl_bitmap, ep->worker->discard_tl_bitmap);
+
     ucp_wireup_select_params_init(&select_params, ep, ep_init_flags,
                                   remote_address, tl_bitmap, 1);
     ucp_wireup_fill_aux_criteria(&criteria, ep_init_flags);
     return ucp_wireup_select_transport(&select_ctx, &select_params, &criteria,
                                        ucp_tl_bitmap_max, UINT64_MAX,
                                        UINT64_MAX, UINT64_MAX, 1, select_info);
+}
+
+ucs_status_t
+ucp_wireup_select_aux_transport_with_bitmap(ucp_ep_h ep, unsigned ep_init_flags,
+                                            ucp_tl_bitmap_t tl_bitmap,
+                                            const ucp_unpacked_address_t *remote_address,
+                                            uint64_t local_dev_bitmap,
+                                            uint64_t remote_dev_bitmap,
+                                            ucp_wireup_select_info_t *select_info)
+{
+    ucp_wireup_select_context_t select_ctx = {};
+    ucp_wireup_criteria_t criteria         = {};
+    ucp_wireup_select_params_t select_params;
+
+    tl_bitmap = UCP_TL_BITMAP_AND_NOT(tl_bitmap, ep->worker->discard_tl_bitmap);
+
+    ucp_wireup_select_params_init(&select_params, ep, ep_init_flags,
+                                  remote_address, tl_bitmap, 1);
+    ucp_wireup_fill_aux_criteria(&criteria, ep_init_flags);
+    return ucp_wireup_select_transport(&select_ctx, &select_params, &criteria,
+                                       ucp_tl_bitmap_max, UINT64_MAX,
+                                       local_dev_bitmap, remote_dev_bitmap, 0, select_info);
 }

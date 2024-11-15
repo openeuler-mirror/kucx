@@ -679,7 +679,13 @@ enum uct_iface_params_field {
     UCT_IFACE_PARAM_FIELD_AM_ALIGN_OFFSET    = UCS_BIT(17),
 
     /** Enables @ref uct_iface_params_t::features */
-    UCT_IFACE_PARAM_FIELD_FEATURES           = UCS_BIT(18)
+    UCT_IFACE_PARAM_FIELD_FEATURES           = UCS_BIT(18),
+
+    /** Enables @ref uct_iface_params_t::failover_upcall */
+    UCT_IFACE_PARAM_FIELD_IFACE_FAILOVER    = UCS_BIT(19),
+
+    /** Enables @ref uct_iface_params_t::ep_failover_upcall */
+    UCT_IFACE_PARAM_FIELD_EP_FAILOVER    = UCS_BIT(20)
 };
 
 /**
@@ -1013,6 +1019,13 @@ enum uct_iface_feature {
     UCT_IFACE_FEATURE_LAST         = UCS_BIT(7)
 };
 
+typedef enum {
+    DEV_FO_FLAG_NONE          = 0,      /* Non-fault */
+    DEV_FO_FLAG_IN_PROGRESS   = 1,      /* in-progress */
+    DEV_FO_FLAG_MIGRATING     = 2,      /* Transferring */
+    DEV_FO_FLAG_MIGRATED      = 3       /* finished */
+} uct_dev_fault_status_t;
+
 /*
  * @ingroup UCT_RESOURCE
  * @brief Process Per Node (PPN) bandwidth specification: f(ppn) = dedicated + shared / ppn
@@ -1220,6 +1233,10 @@ struct uct_iface_params {
     /** Callback flags to indicate where the @a err_handler callback can be
      * invoked from. @ref uct_cb_flags */
     uint32_t                                     err_handler_flags;
+    /** failover upcall cb */
+    uct_iface_error_handler_t                    failover_upcall;
+    /** ep failover upcall cb, for latecomers */
+    uct_ep_error_handler_t                       ep_failover_upcall;
 
     /** These callbacks are only relevant for HW Tag Matching */
     void                                         *eager_arg;

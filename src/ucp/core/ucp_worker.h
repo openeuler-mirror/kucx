@@ -1,5 +1,6 @@
 /**
  * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2019. ALL RIGHTS RESERVED.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
  *
  * See file LICENSE for terms.
  */
@@ -271,6 +272,7 @@ typedef struct ucp_worker {
     ucs_async_context_t              async;               /* Async context for this worker */
     ucp_context_h                    context;             /* Back-reference to UCP context */
     uint64_t                         uuid;                /* Unique ID for wireup */
+    uint64_t                         machine_id;          /* machine id for wireup locally */
     uint64_t                         client_id;           /* Worker client id for wireup */
     uct_worker_h                     uct;                 /* UCT worker handle */
     ucs_mpool_t                      req_mp;              /* Memory pool for requests */
@@ -305,6 +307,7 @@ typedef struct ucp_worker {
     unsigned                         num_ifaces;          /* Number of elements in ifaces array  */
     unsigned                         num_active_ifaces;   /* Number of activated ifaces  */
     ucp_tl_bitmap_t                  scalable_tl_bitmap;  /* Map of scalable tl resources */
+    ucp_tl_bitmap_t                  discard_tl_bitmap;   /* discard tl for failover */
     ucp_worker_cm_t                  *cms;                /* Array of CMs, one for each component */
     ucs_mpool_set_t                  am_mps;              /* Memory pool set for AM receives */
     ucs_mpool_t                      reg_mp;              /* Registered memory pool */

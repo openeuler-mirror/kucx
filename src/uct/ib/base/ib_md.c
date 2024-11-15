@@ -205,6 +205,7 @@ static ucs_stats_class_t uct_ib_md_stats_class = {
 
 extern uct_tl_t UCT_TL_NAME(dc_mlx5);
 extern uct_tl_t UCT_TL_NAME(rc_verbs);
+extern uct_tl_t UCT_TL_NAME(rc_fo);
 extern uct_tl_t UCT_TL_NAME(rc_mlx5);
 extern uct_tl_t UCT_TL_NAME(ud_verbs);
 extern uct_tl_t UCT_TL_NAME(ud_mlx5);
@@ -215,6 +216,7 @@ static uct_tl_t *uct_ib_tls[] = {
 #endif
 #ifdef HAVE_TL_RC
     &UCT_TL_NAME(rc_verbs),
+    &UCT_TL_NAME(rc_fo),
 #endif
 #if defined (HAVE_TL_RC) && defined (HAVE_MLX5_DV)
     &UCT_TL_NAME(rc_mlx5),
