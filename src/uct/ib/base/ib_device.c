@@ -1,7 +1,7 @@
 /**
 * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2014. ALL RIGHTS RESERVED.
 * Copyright (C) UT-Battelle, LLC. 2014. ALL RIGHTS RESERVED.
-* Copyright (C) Huawei Technologies Co., Ltd. 2020.  ALL RIGHTS RESERVED.
+* Copyright (C) Huawei Technologies Co., Ltd. 2020-2024.  ALL RIGHTS RESERVED.
 * See file LICENSE for terms.
 */
 
@@ -11,6 +11,7 @@
 
 #include "ib_device.h"
 #include "ib_md.h"
+#include "ib_failover.h"
 
 #include <ucs/arch/bitops.h>
 #include <ucs/debug/memtrack_int.h>
@@ -397,6 +398,11 @@ void uct_ib_handle_async_event(uct_ib_device_t *dev, uct_ib_async_event_t *event
     char event_info[200];
     ucs_log_level_t level;
 
+    if (uct_ib_dev_event_check_fault(event) && dev->fault_flag == DEV_FO_FLAG_NONE) {
+        uct_device_fault_report(uct_ib_device_name(dev), event->event_type);
+        dev->fault_flag = DEV_FO_FLAG_IN_PROGRESS;
+    }
+
     switch (event->event_type) {
     case IBV_EVENT_CQ_ERR:
         snprintf(event_info, sizeof(event_info), "%s on CQ %p",
@@ -580,6 +586,7 @@ ucs_status_t uct_ib_device_init(uct_ib_device_t *dev,
     ucs_recursive_spinlock_init(&dev->ah_lock, 0);
     kh_init_inplace(uct_ib_async_event, &dev->async_events_hash);
     ucs_spinlock_init(&dev->async_event_lock, 0);
+    dev->fault_flag = DEV_FO_FLAG_NONE;
 
     ucs_debug("initialized device '%s' (%s) with %d ports", uct_ib_device_name(dev),
               ibv_node_type_str(ibv_device->node_type),
@@ -939,8 +946,7 @@ skip_malloc:
             gid_entry = &entries[i];
             ucs_assert(gid_entry != NULL);
 
-            if (!((roce_prio[prio_idx].ver == UCT_IB_DEVICE_ROCE_V1 && gid_entry->gid_type == IBV_GID_TYPE_ROCE_V1) ||
-                  (roce_prio[prio_idx].ver == UCT_IB_DEVICE_ROCE_V2 && gid_entry->gid_type == IBV_GID_TYPE_ROCE_V2))) {
+            if (!((roce_prio[prio_idx].ver == UCT_IB_DEVICE_ROCE_V1 && gid_entry->gid_type == IBV_GID_TYPE_ROCE_V1) || (roce_prio[prio_idx].ver == UCT_IB_DEVICE_ROCE_V2 && gid_entry->gid_type == IBV_GID_TYPE_ROCE_V2))) {
                 continue;
             }
 
@@ -1365,4 +1371,12 @@ const char* uct_ib_ah_attr_str(char *buf, size_t max,
     }
 
     return buf;
+}
+
+void uct_device_fault_report(const char *dev_name, enum ibv_event_type errno_type)
+{
+    char event_info[200];
+    ucs_log_level_t level = UCS_LOG_LEVEL_WARN;
+    snprintf(event_info, sizeof(event_info), "(%d) : %s ", errno_type, ibv_event_type_str(errno_type));
+    ucs_log(level, "Network port malfunction on %s: %s", dev_name, event_info);
 }

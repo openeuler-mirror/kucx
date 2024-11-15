@@ -84,6 +84,9 @@ enum {
      /* Address has only AM lane information */
     UCP_ADDRESS_PACK_FLAG_AM_ONLY     = UCS_BIT(8),
 
+    /* Add machine id */
+    UCP_ADDRESS_PACK_FLAG_MACHINE_ID  = UCS_BIT(9),
+
     UCP_ADDRESS_PACK_FLAG_LAST,
 
     /* A bitmap of all flags: UCP_ADDRESS_PACK_FLAG_LAST is the last bit plus 1,
@@ -131,6 +134,7 @@ struct ucp_address_iface_attr {
 
 typedef struct ucp_address_entry_ep_addr {
     ucp_lane_index_t            lane;         /* Lane index (local or remote) */
+    ucp_lane_index_t            remote_lane;  /* Lane index (remote) */
     const uct_ep_addr_t         *addr;        /* Pointer to ep address */
     size_t                      len;          /* Endpoint address length */
 } ucp_address_entry_ep_addr_t;
@@ -159,6 +163,7 @@ struct ucp_address_entry {
  */
 struct ucp_unpacked_address {
     uint64_t                    uuid;           /* Remote worker UUID */
+    uint64_t                    machine_id;     /* Machine id */
     /* Remote worker address name */
     char                        name[UCP_WORKER_ADDRESS_NAME_MAX];
     unsigned                    address_count;  /* Length of address list */

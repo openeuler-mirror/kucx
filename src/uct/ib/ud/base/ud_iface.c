@@ -701,7 +701,7 @@ ucs_config_field_t uct_ud_iface_config_table[] = {
 
     {"ASYNC_TIMER_TICK", "100ms", "Resolution for async timer",
      ucs_offsetof(uct_ud_iface_config_t, event_timer_tick), UCS_CONFIG_TYPE_TIME},
-    
+
     {"MIN_PENDING_TICK", "3s", "Resolution for process pending time for schedule",
      ucs_offsetof(uct_ud_iface_config_t, min_pending_time), UCS_CONFIG_TYPE_TIME},
 
@@ -1149,3 +1149,4 @@ union ibv_gid* uct_ud_grh_get_dgid(struct ibv_grh *grh, size_t dgid_len)
 
     return &grh->dgid;
 }
+

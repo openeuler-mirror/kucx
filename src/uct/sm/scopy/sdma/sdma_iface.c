@@ -192,10 +192,10 @@ static unsigned uct_sdma_iface_progress(uct_iface_h tl_iface)
 
             if (am_short_bit) {
                 status = uct_iface_invoke_am(&iface->super, id, header,
-                         length + sizeof(sdma_shmem_field->am_desc[k].am_field.header), 0);
+                                             length + sizeof(sdma_shmem_field->am_desc[k].am_field.header), 0);
             } else {
                 status = uct_iface_invoke_am(&iface->super, id, (void *)sdma_shmem_field->am_desc[k].am_field.buff,
-                         length, UCT_CB_PARAM_FLAG_DESC);
+                                             length, UCT_CB_PARAM_FLAG_DESC);
             }
 
             memset(&sdma_shmem_field->am_desc[k], 0x0, sizeof(sdma_am_desc_t));
@@ -298,8 +298,6 @@ static UCS_CLASS_INIT_FUNC(uct_sdma_iface_t, uct_md_h md, uct_worker_h worker, c
         ucs_info("self->src_pasid[%d] = %u", i, self->src_pasid[i]);
     }
 
-    self->src_sdma_handle = ucs_calloc(1, sizeof(void *), "sdma_handle");
-    ucs_assert(self->src_sdma_handle != NULL);
     self->src_sdma_handle = sdma_alloc_chn(self->sdma_md->sdma_fd[self->src_dev_idx]);
     if (self->src_sdma_handle == NULL) {
         ucs_error("Failed to create sdma_device[%d] handle", self->src_dev_idx);

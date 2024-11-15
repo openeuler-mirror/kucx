@@ -1,5 +1,6 @@
 /**
  * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2017. ALL RIGHTS RESERVED.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
  *
  * See file LICENSE for terms.
  */
@@ -195,6 +196,8 @@ typedef enum {
                                           defined AM */
     UCP_AM_ID_AM_SINGLE_REPLY   =  26, /* Single fragment user defined AM
                                           carrying remote ep for reply */
+    UCP_AM_ID_FAILOVER_HANDLER          =  27,
+    UCP_AM_ID_RKEY_HANDLER              =  28,
     UCP_AM_ID_LAST
 } ucp_am_id_t;
 

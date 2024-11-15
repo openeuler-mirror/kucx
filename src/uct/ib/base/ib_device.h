@@ -1,6 +1,6 @@
 /**
 * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2014. ALL RIGHTS RESERVED.
-* Copyright (C) Huawei Technologies Co., Ltd. 2020.  ALL RIGHTS RESERVED.
+* Copyright (C) Huawei Technologies Co., Ltd. 2020-2024.  ALL RIGHTS RESERVED.
 *
 * See file LICENSE for terms.
 */
@@ -228,6 +228,7 @@ typedef struct uct_ib_device {
     uint8_t                     pci_cswap_arg_sizes;
     uint8_t                     atomic_align;
     uint8_t                     lag_level;
+    uct_dev_fault_status_t      fault_flag;       /* for failover */
     /* AH hash */
     khash_t(uct_ib_ah)          ah_hash;
     ucs_recursive_spinlock_t    ah_lock;
@@ -449,7 +450,7 @@ int uct_ib_get_cqe_size(int cqe_size_min);
 const char* uct_ib_ah_attr_str(char *buf, size_t max,
                                const struct ibv_ah_attr *ah_attr);
 
-static inline ucs_status_t uct_ib_poll_cq(struct ibv_cq *cq, unsigned *count, struct ibv_wc *wcs)
+static inline ucs_status_t uct_ib_poll_cq(struct ibv_cq *cq, unsigned *count, struct ibv_wc *wcs, const char *dev_name)
 {
     int ret;
 
@@ -458,7 +459,7 @@ static inline ucs_status_t uct_ib_poll_cq(struct ibv_cq *cq, unsigned *count, st
         if (ucs_likely(ret == 0)) {
             return UCS_ERR_NO_PROGRESS;
         }
-        ucs_fatal("failed to poll receive CQ %d", ret);
+        ucs_fatal("failed to poll receive CQ %d (%m) on device %s", ret, dev_name);
     }
 
     *count = ret;
@@ -466,5 +467,7 @@ static inline ucs_status_t uct_ib_poll_cq(struct ibv_cq *cq, unsigned *count, st
 }
 
 void uct_ib_handle_async_event(uct_ib_device_t *dev, uct_ib_async_event_t *event);
+
+void uct_device_fault_report(const char *dev_name, enum ibv_event_type errno_type);
 
 #endif

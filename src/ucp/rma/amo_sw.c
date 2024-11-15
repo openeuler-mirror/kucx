@@ -88,7 +88,7 @@ ucp_amo_sw_progress(uct_pending_req_t *self, uct_pack_callback_t pack_cb,
             ucp_send_request_id_release(req);
         }
 
-        if (status != UCS_ERR_NO_RESOURCE) {
+        if (status != UCS_ERR_NO_RESOURCE && status != UCS_ERR_BUSY) {
             /* completed with:
              * - with error if a fetch/post operation
              * - either with error or with success if a post operation */

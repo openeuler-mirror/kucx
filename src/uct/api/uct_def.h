@@ -476,6 +476,27 @@ typedef struct uct_cm_ep_server_conn_notify_args {
     ucs_status_t               status;
 } uct_cm_ep_server_conn_notify_args_t;
 
+typedef enum {
+    UCT_RKEY_RELEASED       = 0,                /* initial value, or set when rkey is released */
+    UCT_RKEY_INIT           = UCS_BIT(0),       /* set when need to get rkey, addr is valid */
+    UCT_RKEY_REQ_SENT       = UCS_BIT(1),       /* set when rkey req is sent */
+    UCT_RKEY_REPLIED        = UCS_BIT(2),       /* set when rkey resp is returned, rkey got */
+    UCT_RKEY_USED           = UCS_BIT(3)        /* set when rkey is used */
+} uct_rkey_state_t;
+
+typedef struct uct_rkey_ctx {
+    uct_rkey_state_t rkey_state;
+    uint64_t addr;
+    uint64_t length;
+    uct_rkey_t rkey;
+    uint64_t memh;      /* peer memh */
+} uct_rkey_ctx_t;     /* for get rkey */
+
+typedef enum {
+    EP_FO_FLAG_NONE          = 0,      /* Non-fault */
+    EP_FO_FLAG_IN_PROGRESS   = 1,      /* in-progress */
+    EP_FO_FLAG_FAULT         = 2       /* fault */
+} uct_ep_fault_status_t;
 
 /**
  * @ingroup UCT_AM
@@ -574,6 +595,9 @@ typedef ucs_status_t (*uct_pending_callback_t)(uct_pending_req_t *self);
 typedef ucs_status_t (*uct_error_handler_t)(void *arg, uct_ep_h ep,
                                             ucs_status_t status);
 
+typedef ucs_status_t (*uct_iface_error_handler_t)(void *arg, uct_iface_h iface);
+
+typedef ucs_status_t (*uct_ep_error_handler_t)(void *arg, uct_ep_h ep);
 
 /**
  * @ingroup UCT_RESOURCE

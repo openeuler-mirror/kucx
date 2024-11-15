@@ -1,5 +1,6 @@
 /**
  * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2020. ALL RIGHTS RESERVED.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
  *
  * See file LICENSE for terms.
  */
@@ -336,6 +337,8 @@ ucp_am_zcopy_single_handle_status(ucp_request_t *req,
 {
     if (ucs_unlikely(status == UCS_ERR_NO_RESOURCE)) {
         return UCS_ERR_NO_RESOURCE;
+    } else if (status == UCS_ERR_BUSY) {
+        return UCS_ERR_BUSY;
     }
 
     if (status == UCS_OK) {
@@ -510,7 +513,7 @@ ucs_status_t ucp_do_am_zcopy_multi(uct_pending_req_t *self, uint8_t am_id_first,
             }
         }
 
-        if (status == UCS_ERR_NO_RESOURCE) {
+        if (status == UCS_ERR_NO_RESOURCE || status == UCS_ERR_BUSY) {
             if (req->send.lane != req->send.pending_lane) {
                 /* switch to new pending lane */
                 pending_add_res = ucp_request_pending_add(req);
@@ -630,6 +633,9 @@ ucp_am_short_handle_status_from_pending(ucp_request_t *req, ucs_status_t status)
     if (ucs_unlikely(status == UCS_ERR_NO_RESOURCE)) {
         req->send.lane = ucp_ep_get_am_lane(req->send.ep);
         return UCS_ERR_NO_RESOURCE;
+    } else if (ucs_unlikely(status == UCS_ERR_BUSY)) {
+        req->send.lane = ucp_ep_get_am_lane(req->send.ep);
+        return UCS_ERR_BUSY;
     }
 
     ucp_request_complete_send(req, status);
@@ -654,6 +660,8 @@ ucp_am_bcopy_handle_status_from_pending(uct_pending_req_t *self, int multi,
 
     if (ucs_unlikely(status == UCS_ERR_NO_RESOURCE)) {
         return UCS_ERR_NO_RESOURCE;
+    } else if (ucs_unlikely(status == UCS_ERR_BUSY)) {
+        return UCS_ERR_BUSY;
     }
 
     ucp_request_send_generic_dt_finish(req);

@@ -262,7 +262,7 @@ uct_rc_verbs_iface_qp_cleanup(uct_rc_iface_qp_cleanup_ctx_t *rc_cleanup_ctx)
     uct_ib_destroy_qp(cleanup_ctx->qp);
 }
 
-static UCS_CLASS_INIT_FUNC(uct_rc_verbs_iface_t, uct_md_h tl_md,
+UCS_CLASS_INIT_FUNC(uct_rc_verbs_iface_t, uct_md_h tl_md,
                            uct_worker_h worker, const uct_iface_params_t *params,
                            const uct_iface_config_t *tl_config)
 {
@@ -276,6 +276,10 @@ static UCS_CLASS_INIT_FUNC(uct_rc_verbs_iface_t, uct_md_h tl_md,
     ucs_status_t status;
     struct ibv_qp *qp;
     uct_rc_hdr_t *hdr;
+    uct_iface_ops_t *iface_ops = config->iface_op ? config->iface_op : &uct_rc_verbs_iface_tl_ops;
+    uct_rc_iface_ops_t *rc_iface_ops = config->rc_iface_op ? config->rc_iface_op : &uct_rc_verbs_iface_ops;
+    ucs_callback_t rc_iface_progress = config->rc_iface_progress ?
+                                       config->rc_iface_progress : uct_rc_verbs_iface_progress;
 
     init_attr.fc_req_size           = sizeof(uct_rc_pending_req_t);
     init_attr.rx_hdr_len            = sizeof(uct_rc_hdr_t);
@@ -285,8 +289,8 @@ static UCS_CLASS_INIT_FUNC(uct_rc_verbs_iface_t, uct_md_h tl_md,
     init_attr.seg_size              = ib_config->seg_size;
     init_attr.max_rd_atomic         = IBV_DEV_ATTR(&ib_md->dev, max_qp_rd_atom);
 
-    UCS_CLASS_CALL_SUPER_INIT(uct_rc_iface_t, &uct_rc_verbs_iface_tl_ops,
-                              &uct_rc_verbs_iface_ops, tl_md, worker, params,
+    UCS_CLASS_CALL_SUPER_INIT(uct_rc_iface_t, iface_ops,
+                              rc_iface_ops, tl_md, worker, params,
                               &config->super.super, &init_attr);
 
     self->config.tx_max_wr               = ucs_min(config->tx_max_wr,
@@ -294,7 +298,7 @@ static UCS_CLASS_INIT_FUNC(uct_rc_verbs_iface_t, uct_md_h tl_md,
     self->super.config.tx_moderation     = ucs_min(config->super.tx_cq_moderation,
                                                    self->config.tx_max_wr / 4);
     self->super.config.fence_mode        = (uct_rc_fence_mode_t)config->super.super.fence_mode;
-    self->super.progress                 = uct_rc_verbs_iface_progress;
+    self->super.progress                 = rc_iface_progress;
     self->super.super.config.sl          = uct_ib_iface_config_select_sl(ib_config);
 
     if ((config->super.super.fence_mode == UCT_RC_FENCE_MODE_WEAK) ||
@@ -456,10 +460,10 @@ static UCS_CLASS_CLEANUP_FUNC(uct_rc_verbs_iface_t)
 }
 
 UCS_CLASS_DEFINE(uct_rc_verbs_iface_t, uct_rc_iface_t);
-static UCS_CLASS_DEFINE_NEW_FUNC(uct_rc_verbs_iface_t, uct_iface_t, uct_md_h,
-                                 uct_worker_h, const uct_iface_params_t*,
-                                 const uct_iface_config_t*);
-static UCS_CLASS_DEFINE_DELETE_FUNC(uct_rc_verbs_iface_t, uct_iface_t);
+UCS_CLASS_DEFINE_NEW_FUNC(uct_rc_verbs_iface_t, uct_iface_t, uct_md_h,
+                          uct_worker_h, const uct_iface_params_t*,
+                          const uct_iface_config_t*);
+UCS_CLASS_DEFINE_DELETE_FUNC(uct_rc_verbs_iface_t, uct_iface_t);
 
 static uct_iface_ops_t uct_rc_verbs_iface_tl_ops = {
     .ep_am_short              = uct_rc_verbs_ep_am_short,

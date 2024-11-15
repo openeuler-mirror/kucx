@@ -137,18 +137,34 @@ ucs_status_t uct_sdma_mem_alloc(uct_md_h tl_md, size_t *length_p, void **address
 ucs_status_t uct_sdma_mem_free(uct_md_h md, uct_mem_h memh)
 {
     uct_sdma_key_t *sdma_memh = memh;
-    ucs_status_t status;
+    ucs_status_t status = UCS_OK;
+    uct_sdma_md_t *sdma_md = ucs_derived_of(md, uct_sdma_md_t);
+
     if (sdma_memh == NULL || sdma_memh->address == NULL) {
+        if (sdma_memh) {
+            ucs_free(sdma_memh);
+        }
         return UCS_ERR_NO_MEMORY;
     }
-    status = uct_sdma_mem_dereg(md,memh);
-    if (status != UCS_OK) {
-        ucs_error("Failed to unpinned memory for sdma_mem_addr");
-        return status;
+
+    if (sdma_md->sdma_fd[0] < 0 || sdma_md->unpin_umem_cb == NULL) {
+        status = UCS_ERR_IO_ERROR;
+        goto out;
     }
+    if (uct_exec_pin_flag) {
+        status = (ucs_status_t)sdma_md->unpin_umem_cb(sdma_md->sdma_fd[0], sdma_memh->cookie);
+        if (status != UCS_OK) {
+            ucs_error("sdma_unpin_umem failed , status is %d.", status);
+            status = UCS_ERR_IO_ERROR;
+            goto out;
+        }
+    } else {
+        ucs_debug("temp not exec uct_sdma_mem_dereg");
+    }
+out:
     ucs_free(sdma_memh->address);
     ucs_free(sdma_memh);
-    return UCS_OK;
+    return status;
 }
 
 static uct_md_ops_t uct_sdma_md_ops = {

@@ -1,5 +1,6 @@
 /**
 * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2019. ALL RIGHTS RESERVED.
+* Copyright (C) Huawei Technologies Co., Ltd. 2024.  ALL RIGHTS RESERVED.
 *
 * See file LICENSE for terms.
 */
@@ -69,6 +70,7 @@ uct_ud_verbs_post_send(uct_ud_verbs_iface_t *iface, uct_ud_verbs_ep_t *ep,
                        struct ibv_send_wr *wr, unsigned send_flags,
                        unsigned max_log_sge)
 {
+    uct_ib_md_t *md = uct_ib_iface_md(&iface->super.super);
     struct ibv_send_wr *bad_wr;
     int UCS_V_UNUSED ret;
 
@@ -90,7 +92,9 @@ uct_ud_verbs_post_send(uct_ud_verbs_iface_t *iface, uct_ud_verbs_ep_t *ep,
 
     UCT_UD_EP_HOOK_CALL_TX(&ep->super, (uct_ud_neth_t*)iface->tx.sge[0].addr);
     ret = ibv_post_send(iface->super.qp, wr, &bad_wr);
-    ucs_assertv(ret == 0, "ibv_post_send() returned %d (%m)", ret);
+    if (ucs_unlikely(ret != 0)) {
+        ucs_warn("ibv_post_send() returned %d (%m) on device %s", ret, uct_ib_device_name(&md->dev));
+    }
 
     uct_ib_log_post_send(&iface->super.super, iface->super.qp, wr, max_log_sge,
                          uct_ud_dump_packet);
@@ -355,13 +359,14 @@ ucs_status_t uct_ud_verbs_ep_put_short(uct_ep_h tl_ep,
 static UCS_F_ALWAYS_INLINE unsigned
 uct_ud_verbs_iface_poll_tx(uct_ud_verbs_iface_t *iface, int is_async)
 {
+    uct_ib_md_t *md = uct_ib_iface_md(&iface->super.super);
     unsigned num_completed;
     struct ibv_wc wc;
     int ret;
 
     ret = ibv_poll_cq(iface->super.super.cq[UCT_IB_DIR_TX], 1, &wc);
     if (ucs_unlikely(ret < 0)) {
-        ucs_fatal("Failed to poll send CQ");
+        ucs_fatal("Failed to poll send CQ, ibv_poll_cq() returned %d (%m) on device %s", ret, uct_ib_device_name(&md->dev));
         return 0;
     }
 
@@ -392,13 +397,14 @@ uct_ud_verbs_iface_poll_tx(uct_ud_verbs_iface_t *iface, int is_async)
 static UCS_F_ALWAYS_INLINE unsigned
 uct_ud_verbs_iface_poll_rx(uct_ud_verbs_iface_t *iface, int is_async)
 {
+    uct_ib_md_t *md = uct_ib_iface_md(&iface->super.super);
     unsigned num_wcs = iface->super.super.config.rx_max_poll;
     struct ibv_wc wc[num_wcs];
     ucs_status_t status;
     void *packet;
     int i;
 
-    status = uct_ib_poll_cq(iface->super.super.cq[UCT_IB_DIR_RX], &num_wcs, wc);
+    status = uct_ib_poll_cq(iface->super.super.cq[UCT_IB_DIR_RX], &num_wcs, wc, uct_ib_device_name(&md->dev));
     if (status != UCS_OK) {
         num_wcs = 0;
         goto out;
@@ -659,6 +665,7 @@ static uct_iface_ops_t uct_ud_verbs_iface_tl_ops = {
 static UCS_F_NOINLINE void
 uct_ud_verbs_iface_post_recv_always(uct_ud_verbs_iface_t *iface, int max)
 {
+    uct_ib_md_t *md = uct_ib_iface_md(&iface->super.super);
     struct ibv_recv_wr *bad_wr;
     uct_ib_recv_wr_t *wrs;
     unsigned count;
@@ -673,8 +680,8 @@ uct_ud_verbs_iface_post_recv_always(uct_ud_verbs_iface_t *iface, int max)
     }
 
     ret = ibv_post_recv(iface->super.qp, &wrs[0].ibwr, &bad_wr);
-    if (ret != 0) {
-        ucs_fatal("ibv_post_recv() returned %d: %m", ret);
+    if (ucs_unlikely(ret != 0)) {
+        ucs_fatal("ibv_post_recv() returned %d (%m) on device %s", ret, uct_ib_device_name(&md->dev));
     }
     iface->super.rx.available -= count;
 }

@@ -1,5 +1,6 @@
 /**
  * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2016. ALL RIGHTS RESERVED.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
  *
  * See file LICENSE for terms.
  */
@@ -88,6 +89,8 @@ ucs_status_t ucp_proto_progress_am_single(uct_pending_req_t *self)
                               ucp_proto_max_packed_size());
     if (ucs_unlikely(status == UCS_ERR_NO_RESOURCE)) {
         return UCS_ERR_NO_RESOURCE;
+    } else if (ucs_unlikely(status == UCS_ERR_BUSY)) {
+        return UCS_ERR_BUSY;
     }
 
     /* TODO: handle failure */

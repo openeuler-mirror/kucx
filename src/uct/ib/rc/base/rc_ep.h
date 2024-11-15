@@ -303,6 +303,8 @@ ucs_status_t uct_rc_txqp_init(uct_rc_txqp_t *txqp, uct_rc_iface_t *iface,
 void uct_rc_txqp_cleanup(uct_rc_iface_t *iface, uct_rc_txqp_t *txqp);
 void uct_rc_txqp_vfs_populate(uct_rc_txqp_t *txqp, void *parent_obj);
 
+ucs_status_t uct_rc_ep_check_progress(uct_pending_req_t *self);
+
 static inline int16_t uct_rc_txqp_available(uct_rc_txqp_t *txqp)
 {
     return txqp->available;

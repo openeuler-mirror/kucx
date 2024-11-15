@@ -1,5 +1,6 @@
 /**
 * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2014. ALL RIGHTS RESERVED.
+* Copyright (C) Huawei Technologies Co., Ltd. 2024.  ALL RIGHTS RESERVED.
 *
 * See file LICENSE for terms.
 */
@@ -262,9 +263,7 @@ struct uct_rc_iface {
         ucs_arbiter_t           arbiter;
         uct_rc_iface_send_op_t  *ops_buffer;
         uct_ib_fence_info_t     fi;
-#if UCS_ENABLE_ASSERT
         int                     in_pending;
-#endif
     } tx;
 
     struct {
@@ -322,6 +321,32 @@ UCS_CLASS_DECLARE(uct_rc_iface_t, uct_iface_ops_t*, uct_rc_iface_ops_t*,
                   const uct_rc_iface_common_config_t*,
                   const uct_ib_iface_init_attr_t*);
 
+typedef struct uct_rc_buf_info {
+    uct_ep_operation_t op_type;
+    union {
+        struct {
+            unsigned length;
+        } bcopy;     // same as short
+        struct {
+            union {
+                unsigned header_length;
+                uint64_t remote_addr;
+            };
+            uct_iov_t iov[UCT_IB_MAX_IOV];
+            size_t iovcnt;
+        } zcopy;
+        struct {
+            uint64_t remote_addr;
+            unsigned length;
+        } rdma;
+        struct {
+            uint64_t remote_addr;
+            int32_t opcode;
+            uint64_t compare_add;
+            uint64_t swap;
+        } atomic;
+    };
+} uct_rc_buf_info_t;
 
 struct uct_rc_iface_send_op {
     union {
@@ -333,6 +358,7 @@ struct uct_rc_iface_send_op {
     uint16_t                      sn;
     uint16_t                      flags;
     unsigned                      length;
+    uct_rc_buf_info_t             *buf_info;   /* for failover */
     union {
         void                      *buffer;     /* atomics / desc /
                                                   FC_PURE_GRANT request */
@@ -597,15 +623,11 @@ uct_rc_iface_invoke_pending_cb(uct_rc_iface_t *iface, uct_pending_req_t *req)
     ucs_status_t status;
 
     ucs_trace_data("progressing pending request %p", req);
-#if UCS_ENABLE_ASSERT
     iface->tx.in_pending = 1;
-#endif
 
     status = req->func(req);
 
-#if UCS_ENABLE_ASSERT
     iface->tx.in_pending = 0;
-#endif
     ucs_trace_data("status returned from progress pending: %s",
                    ucs_status_string(status));
 

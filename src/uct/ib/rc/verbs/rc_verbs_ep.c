@@ -1,6 +1,7 @@
 /**
 * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2019. ALL RIGHTS RESERVED.
 * Copyright (C) UT-Battelle, LLC. 2015. ALL RIGHTS RESERVED.
+* Copyright (C) Huawei Technologies Co., Ltd. 2024.  ALL RIGHTS RESERVED.
 *
 * See file LICENSE for terms.
 */
@@ -34,6 +35,7 @@ static UCS_F_ALWAYS_INLINE void
 uct_rc_verbs_ep_post_send(uct_rc_verbs_iface_t* iface, uct_rc_verbs_ep_t* ep,
                           struct ibv_send_wr *wr, int send_flags, int max_log_sge)
 {
+    uct_ib_md_t *md = uct_ib_iface_md(&iface->super.super);
     struct ibv_send_wr *bad_wr;
     int ret;
 
@@ -55,8 +57,8 @@ uct_rc_verbs_ep_post_send(uct_rc_verbs_iface_t* iface, uct_rc_verbs_ep_t* ep,
                          (wr->opcode == IBV_WR_SEND) ? uct_rc_ep_packet_dump : NULL);
 
     ret = ibv_post_send(ep->qp, wr, &bad_wr);
-    if (ret != 0) {
-        ucs_fatal("ibv_post_send() returned %d (%m)", ret);
+    if (ucs_unlikely(ret != 0)) {
+        ucs_fatal("ibv_post_send() returned %d (%m) on device %s", ret, uct_ib_device_name(&md->dev));
     }
 
     uct_rc_verbs_txqp_posted(&ep->super.txqp, &ep->txcnt, &iface->super, send_flags & IBV_SEND_SIGNALED);

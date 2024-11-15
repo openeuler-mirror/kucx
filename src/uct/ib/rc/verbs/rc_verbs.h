@@ -1,5 +1,6 @@
 /**
 * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2019. ALL RIGHTS RESERVED.
+* Copyright (C) Huawei Technologies Co., Ltd. 2024.  ALL RIGHTS RESERVED.
 *
 * See file LICENSE for terms.
 */
@@ -13,7 +14,8 @@
 
 
 #define UCT_RC_VERBS_IFACE_FOREACH_TXWQE(_iface, _i, _wc, _num_wcs) \
-      status = uct_ib_poll_cq((_iface)->super.cq[UCT_IB_DIR_TX], &_num_wcs, _wc); \
+      uct_ib_md_t *md = uct_ib_iface_md(&(_iface)->super); \
+      status = uct_ib_poll_cq((_iface)->super.cq[UCT_IB_DIR_TX], &_num_wcs, _wc, uct_ib_device_name(&md->dev)); \
       if (status != UCS_OK) { \
           return 0; \
       } \
@@ -80,6 +82,11 @@ typedef struct uct_rc_verbs_iface_config {
     size_t                             max_am_hdr;
     unsigned                           tx_max_wr;
     unsigned                           flush_mode;
+
+    /* to inherit verbs for failover */
+    uct_iface_ops_t                    *iface_op;
+    uct_rc_iface_ops_t                 *rc_iface_op;
+    ucs_callback_t                     rc_iface_progress;
 } uct_rc_verbs_iface_config_t;
 
 
@@ -108,6 +115,10 @@ typedef struct uct_rc_verbs_iface {
 UCS_CLASS_DECLARE(uct_rc_verbs_ep_t, const uct_ep_params_t *);
 UCS_CLASS_DECLARE_NEW_FUNC(uct_rc_verbs_ep_t, uct_ep_t, const uct_ep_params_t *);
 UCS_CLASS_DECLARE_DELETE_FUNC(uct_rc_verbs_ep_t, uct_ep_t);
+
+UCS_CLASS_DECLARE(uct_rc_verbs_iface_t, uct_md_h,
+                  uct_worker_h, const uct_iface_params_t*,
+                  const uct_iface_config_t*);
 
 ucs_status_t uct_rc_verbs_ep_put_short(uct_ep_h tl_ep, const void *buffer,
                                        unsigned length, uint64_t remote_addr,
