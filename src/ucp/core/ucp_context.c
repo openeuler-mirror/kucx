@@ -54,7 +54,9 @@
     _macro(UCP_AM_ID_AM_SINGLE) \
     _macro(UCP_AM_ID_AM_FIRST) \
     _macro(UCP_AM_ID_AM_MIDDLE) \
-    _macro(UCP_AM_ID_AM_SINGLE_REPLY)
+    _macro(UCP_AM_ID_AM_SINGLE_REPLY) \
+    _macro(UCP_AM_ID_FAILOVER_HANDLER) \
+    _macro(UCP_AM_ID_RKEY_HANDLER)
 
 #define UCP_AM_HANDLER_DECL(_id) extern ucp_am_handler_t ucp_am_handler_##_id;
 
@@ -214,6 +216,20 @@ static ucs_config_field_t ucp_context_config_table[] = {
   {"MAX_RMA_RAILS", "1",
    "Maximal number of devices on which a RMA operation may be executed in parallel",
    ucs_offsetof(ucp_context_config_t, max_rma_lanes), UCS_CONFIG_TYPE_UINT},
+
+  {"MAX_AUX_RAILS", "1",
+   "Maximal number of aux wireup devices on when using rc failover",
+   ucs_offsetof(ucp_context_config_t, max_aux_lanes), UCS_CONFIG_TYPE_UINT},
+
+  {"AUX_TIMEOUT", "20s",
+   "Aux wireup timeout threshold, affected only when UCX_MAX_AUX_RAILS is greater than 1",
+   ucs_offsetof(ucp_context_config_t, aux_timeout), UCS_CONFIG_TYPE_TIME},
+
+  {"LOCAL_CONN_SAME_DEV", "y",
+   "When local processes wireup with each other, the same device is selected\n"
+   "on the one hand, to narrow down the fault scope\n"
+   "on the other hand, if device supports loopback, performance should be better",
+   ucs_offsetof(ucp_context_config_t, local_conn_same_dev), UCS_CONFIG_TYPE_BOOL},
 
   {"MIN_RNDV_CHUNK_SIZE", "16k",
    "Minimum chunk size to split the message sent with rendezvous protocol on\n"
@@ -497,6 +513,7 @@ static ucs_config_field_t ucp_config_table[] = {
    " - ib      : all infiniband transports (rc/rc_mlx5, ud/ud_mlx5, dc_mlx5).\n"
    " - rc_v    : rc verbs (uses ud for bootstrap).\n"
    " - rc_x    : rc with accelerated verbs (uses ud_mlx5 for bootstrap).\n"
+   " - rc_f    : rc verbs with failover (uses ud for bootstrap).\n"
    " - rc      : rc_v and rc_x (preferably if available).\n"
    " - ud_v    : ud verbs.\n"
    " - ud_x    : ud with accelerated verbs.\n"
@@ -577,6 +594,7 @@ static ucp_tl_alias_t ucp_tl_aliases[] = {
   { "ud_x",  { "ud_mlx5", NULL } },
   { "ud",    { "ud_mlx5", "ud_verbs", NULL } },
   { "rc_v",  { "rc_verbs", UCP_TL_AUX("ud_verbs"), NULL } },
+  { "rc_f",  { "rc_fo", UCP_TL_AUX("ud_verbs"), NULL } },
   { "rc_x",  { "rc_mlx5", UCP_TL_AUX("ud_mlx5"), NULL } },
   { "rc",    { "rc_mlx5", UCP_TL_AUX("ud_mlx5"), "rc_verbs",
                UCP_TL_AUX("ud_verbs"), NULL } },
@@ -588,6 +606,10 @@ static ucp_tl_alias_t ucp_tl_aliases[] = {
   { NULL }
 };
 
+const char *tl_exclusions_in_all[] = {
+    "rc_fo",
+    NULL
+};
 
 const char *ucp_feature_str[] = {
     [ucs_ilog2(UCP_FEATURE_TAG)]    = "UCP_FEATURE_TAG",
@@ -954,8 +976,15 @@ ucp_is_resource_in_transports_list(const char *tl_name,
                                    uint8_t *rsc_flags, uint64_t *tl_cfg_mask)
 {
     uint8_t search_result;
+    const char **excl_tl;
 
     if (allow_list->mode == UCS_CONFIG_ALLOW_LIST_ALLOW_ALL) {
+        /* some tls shouldn't appear in ALL */
+        for (excl_tl = tl_exclusions_in_all; *excl_tl != NULL; excl_tl++) {
+            if (!strcmp(tl_name, *excl_tl)) {
+                return 0;
+            }
+        }
         return 1;
     }
 

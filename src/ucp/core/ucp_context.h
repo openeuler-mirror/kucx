@@ -110,6 +110,12 @@ typedef struct ucp_context_config {
     unsigned                               max_rndv_lanes;
     /** RMA multi-lane support */
     unsigned                               max_rma_lanes;
+    /** Aux wireup failover support */
+    unsigned                               max_aux_lanes;
+    /** Aux wireup timeout threshold */
+    double                                 aux_timeout;
+    /** local connection uses the same dev, default 1 */
+    int                                    local_conn_same_dev;
     /** Minimum allowed chunk size when splitting rndv message over multiple
      *  lanes */
     size_t                                 min_rndv_chunk_size;

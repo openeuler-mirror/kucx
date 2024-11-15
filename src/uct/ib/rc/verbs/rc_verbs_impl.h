@@ -1,5 +1,6 @@
 /**
 * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2014. ALL RIGHTS RESERVED.
+* Copyright (C) Huawei Technologies Co., Ltd. 2024.  ALL RIGHTS RESERVED.
 *
 * See file LICENSE for terms.
 */
@@ -83,8 +84,9 @@ uct_rc_verbs_iface_poll_rx_common(uct_rc_verbs_iface_t *iface)
     ucs_status_t status;
     unsigned num_wcs = iface->super.super.config.rx_max_poll;
     struct ibv_wc wc[num_wcs];
+    uct_ib_md_t *md = uct_ib_iface_md(&iface->super.super);
 
-    status = uct_ib_poll_cq(iface->super.super.cq[UCT_IB_DIR_RX], &num_wcs, wc);
+    status = uct_ib_poll_cq(iface->super.super.cq[UCT_IB_DIR_RX], &num_wcs, wc, uct_ib_device_name(&md->dev));
     if (status != UCS_OK) {
         num_wcs = 0;
         goto out;

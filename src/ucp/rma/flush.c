@@ -126,7 +126,7 @@ static void ucp_ep_flush_progress(ucp_request_t *req)
             ucp_ep_flush_request_update_uct_comp(req, -1, UCS_BIT(lane));
         } else if (status == UCS_INPROGRESS) {
             ucp_ep_flush_request_update_uct_comp(req, 0, UCS_BIT(lane));
-        } else if (status == UCS_ERR_NO_RESOURCE) {
+        } else if (status == UCS_ERR_NO_RESOURCE || status == UCS_ERR_BUSY) {
             if (req->send.lane != UCP_NULL_LANE) {
                 ucp_trace_req(req,
                               "ep %p not adding pending flush on lane %d "
@@ -279,7 +279,7 @@ ucs_status_t ucp_ep_flush_progress_pending(uct_pending_req_t *self)
         ucp_ep_flush_request_update_uct_comp(req, -1, UCS_BIT(lane));
     } else if (status == UCS_INPROGRESS) {
         ucp_ep_flush_request_update_uct_comp(req, 0, UCS_BIT(lane));
-    } else if (UCS_STATUS_IS_ERR(status) && (status != UCS_ERR_NO_RESOURCE)) {
+    } else if (UCS_STATUS_IS_ERR(status) && (status != UCS_ERR_NO_RESOURCE) && (status != UCS_ERR_BUSY)) {
         ucp_ep_flush_error(req, lane, status);
     }
 
@@ -298,6 +298,8 @@ ucs_status_t ucp_ep_flush_progress_pending(uct_pending_req_t *self)
 
     if (status == UCS_ERR_NO_RESOURCE) {
         return UCS_ERR_NO_RESOURCE;
+    } else if (status == UCS_ERR_BUSY) {
+        return UCS_OK;          // use ucp_ep_flush_request_resched above
     } else if (!UCS_STATUS_IS_ERR(status)) {
         /* flushed callback might release the request */
         if (!completed) {
@@ -608,7 +610,7 @@ ucp_worker_flush_nbx_internal(ucp_worker_h worker,
 
     if (!worker->flush_ops_count) {
         status = ucp_worker_flush_check(worker);
-        if ((status != UCS_INPROGRESS) && (status != UCS_ERR_NO_RESOURCE)) {
+        if ((status != UCS_INPROGRESS) && (status != UCS_ERR_NO_RESOURCE) && (status != UCS_ERR_BUSY)) {
             /* UCS_OK is returned here as well */
             return UCS_STATUS_PTR(status);
         }

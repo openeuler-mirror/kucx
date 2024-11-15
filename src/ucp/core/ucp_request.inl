@@ -1,5 +1,6 @@
 /**
  * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2019. ALL RIGHTS RESERVED.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
  *
  * See file LICENSE for terms.
  */
@@ -174,7 +175,7 @@ UCS_PTR_MAP_IMPL(request, 0);
 
 
 #define ucp_request_send_check_status(_status, _ret, _done) \
-    if (ucs_likely((_status) != UCS_ERR_NO_RESOURCE)) { \
+    if (ucs_likely((_status) != UCS_ERR_NO_RESOURCE && (_status) != UCS_ERR_BUSY)) { \
         _ret = UCS_STATUS_PTR(_status); /* UCS_OK also goes here */ \
         _done; \
     }
@@ -353,7 +354,7 @@ static int UCS_F_ALWAYS_INLINE ucp_request_try_send(ucp_request_t *req)
     } else if (status == UCS_INPROGRESS) {
         /* Not completed, but made progress */
         return 0;
-    } else if (status == UCS_ERR_NO_RESOURCE) {
+    } else if (status == UCS_ERR_NO_RESOURCE || status == UCS_ERR_BUSY) {
         /* No send resources, try to add to pending queue */
         return ucp_request_pending_add(req);
     }
@@ -487,7 +488,7 @@ ucp_request_send_state_advance(ucp_request_t *req,
                                const ucp_dt_state_t *new_dt_state,
                                unsigned proto, ucs_status_t status)
 {
-    if (status == UCS_ERR_NO_RESOURCE) {
+    if (status == UCS_ERR_NO_RESOURCE || status == UCS_ERR_BUSY) {
         /* Don't advance in order to continue on next try from last valid point
          */
         return;

@@ -1,6 +1,7 @@
 /**
 * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2020. ALL RIGHTS RESERVED.
 * Copyright (C) Los Alamos National Security, LLC. 2019 ALL RIGHTS RESERVED.
+* Copyright (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
 *
 * See file LICENSE for terms.
 */
@@ -184,6 +185,18 @@ static void ucp_ep_deallocate(ucp_ep_h ep)
     ucs_strided_alloc_put(&ep->worker->ep_alloc, ep);
 }
 
+// ucp init failover ctx
+static void ucp_init_failover_ctx(ucp_ep_h ep)
+{
+    uint8_t i;
+    for (i = 0; i < UCP_MAX_LANES; i++) {
+        ep->failover_ctx.failover_array[i] = NULL;
+    }
+    ep->failover_ctx.failover_num = 0;
+    ep->failover_ctx.failover_id = UCS_CALLBACKQ_ID_NULL;
+    ep->failover_ctx.wireup_timeout_check_prog_id = UCS_CALLBACKQ_ID_NULL;
+}
+
 static ucp_ep_h ucp_ep_allocate(ucp_worker_h worker, const char *peer_name)
 {
     ucp_ep_h ep;
@@ -245,6 +258,13 @@ static ucp_ep_h ucp_ep_allocate(ucp_worker_h worker, const char *peer_name)
     if (status != UCS_OK) {
         goto err_free_ep_ext;
     }
+
+    // failover
+    ucp_init_failover_ctx(ep);
+    memset(ep->lanes2remote, UCP_NULL_LANE, sizeof(ep->lanes2remote));
+    memset(ep->lanes2dst_rsc, UCP_NULL_RESOURCE, sizeof(ep->lanes2dst_rsc));
+    UCS_BITMAP_CLEAR(&ep->discarded_rsc_bitmap);
+    UCS_BITMAP_CLEAR(&ep->discarded_lane_bitmap);
 
     return ep;
 
@@ -1049,7 +1069,8 @@ ucp_ep_create_api_to_worker_addr(ucp_worker_h worker,
     UCP_CHECK_PARAM_NON_NULL(params->address, status, goto out);
 
     status = ucp_address_unpack(worker, params->address,
-                                ucp_worker_default_address_pack_flags(worker),
+                                ucp_worker_default_address_pack_flags(worker) |
+                                UCP_ADDRESS_PACK_FLAG_TL_RSC_IDX,
                                 &remote_address);
     if (status != UCS_OK) {
         goto out;
@@ -1873,7 +1894,8 @@ static int ucp_ep_config_lane_is_equal(const ucp_ep_config_key_t *key1,
 }
 
 int ucp_ep_config_is_equal(const ucp_ep_config_key_t *key1,
-                           const ucp_ep_config_key_t *key2)
+                           const ucp_ep_config_key_t *key2,
+                           unsigned ep_init_flags)
 {
     ucp_lane_index_t lane;
     int i;
@@ -1890,12 +1912,26 @@ int ucp_ep_config_is_equal(const ucp_ep_config_key_t *key1,
         (key1->reachable_md_map != key2->reachable_md_map) ||
         (key1->am_lane != key2->am_lane) ||
         (key1->tag_lane != key2->tag_lane) ||
-        (key1->wireup_msg_lane != key2->wireup_msg_lane) ||
+        /* no need to judge wireup_msg_lane */
         (key1->cm_lane != key2->cm_lane) ||
         (key1->keepalive_lane != key2->keepalive_lane) ||
         (key1->rkey_ptr_lane != key2->rkey_ptr_lane) ||
         (key1->err_mode != key2->err_mode) ||
         (key1->flags != key2->flags)) {
+        return 0;
+    }
+
+    /*
+     * in normal cases, the last am_bw lane is selected for wireup_msg_lane,
+     * as long as am_bw lane can be matched, wireup_msg_lane must be matched too. 
+     * so wireup_msg_lane does not need to be judged.
+     * but during failover, wireup_msg_lane may be switched.
+     * here preceding judgment logic needs to be deleted.
+     * in addition, judgment is restored only when the wireup_msg_lane is reselected,
+     * indicating that two ep_configs are different only because of wireup_msg_lane.
+     */
+    if ((ep_init_flags & UCP_EP_INIT_RESELECE_WIREUP) &&
+        (key1->wireup_msg_lane != key2->wireup_msg_lane)) {
         return 0;
     }
 
@@ -3074,6 +3110,11 @@ void ucp_ep_config_lane_info_str(ucp_worker_h worker,
     prio = ucp_ep_config_get_multi_lane_prio(key->rma_bw_lanes, lane);
     if (prio != -1) {
         ucs_string_buffer_appendf(strbuf, " rma_bw#%d", prio);
+    }
+
+    prio = ucp_ep_config_get_multi_lane_prio(key->rma_lanes, lane);
+    if (prio != -1) {
+        ucs_string_buffer_appendf(strbuf, " rma#%d", prio);
     }
 
     prio = ucp_ep_config_get_multi_lane_prio(key->amo_lanes, lane);

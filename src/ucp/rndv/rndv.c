@@ -1,5 +1,6 @@
 /**
  * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2020. ALL RIGHTS RESERVED.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
  *
  * See file LICENSE for terms.
  */
@@ -20,6 +21,8 @@
 #include <ucp/proto/proto_am.inl>
 #include <ucs/datastruct/queue.h>
 
+static uint8_t ucp_rndv_get_rkey_index(ucp_request_t *rndv_req, ucp_rkey_h rkey,
+                                       ucp_lane_index_t lane);
 
 static UCS_F_ALWAYS_INLINE int
 ucp_rndv_memtype_direct_support(ucp_context_h context, size_t reg_length,
@@ -603,7 +606,7 @@ ucp_rndv_progress_rma_zcopy_common(ucp_request_t *req, ucp_lane_index_t lane,
              * transmitted */
             ucp_rndv_zcopy_next_lane(req);
             return UCS_INPROGRESS;
-        } else if (status == UCS_ERR_NO_RESOURCE) {
+        } else if (status == UCS_ERR_NO_RESOURCE || status == UCS_ERR_BUSY) {
             if (lane != req->send.pending_lane) {
                 /* switch to new pending lane */
                 pending_add_res = ucp_request_pending_add(req);
@@ -628,12 +631,12 @@ UCS_PROFILE_FUNC_VOID(ucp_rndv_get_completion, (self), uct_completion_t *self)
     ucp_request_t *rreq;
     ucs_status_t status;
 
+    status = rndv_req->send.state.uct_comp.status;
     if (rndv_req->send.state.dt.offset != rndv_req->send.length) {
         return;
     }
 
     rreq   = ucp_request_get_super(rndv_req);
-    status = rndv_req->send.state.uct_comp.status;
     ep     = rndv_req->send.ep;
 
     ucs_assertv(rndv_req->send.state.dt.offset == rndv_req->send.length,
@@ -1801,6 +1804,10 @@ ucs_status_t ucp_rndv_send_handle_status_from_pending(ucp_request_t *sreq,
     if (ucs_unlikely(status != UCS_OK)) {
         if (status == UCS_ERR_NO_RESOURCE) {
             return UCS_ERR_NO_RESOURCE;
+        }
+
+        if (status == UCS_ERR_BUSY) {
+            return UCS_ERR_BUSY;
         }
 
         ucp_ep_req_purge(sreq->send.ep, sreq, status, 0);

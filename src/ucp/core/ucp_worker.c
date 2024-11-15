@@ -1131,6 +1131,7 @@ static ucs_status_t ucp_worker_add_resource_ifaces(ucp_worker_h worker)
             UCS_BITMAP_SET(worker->scalable_tl_bitmap, tl_id);
         }
     }
+    UCS_BITMAP_CLEAR(&worker->discard_tl_bitmap);
 
     ucs_debug("selected scalable tl bitmap: " UCT_TL_BITMAP_FMT " (%zu tls)",
               UCT_TL_BITMAP_ARG(&worker->scalable_tl_bitmap),
@@ -1372,6 +1373,12 @@ ucs_status_t ucp_worker_iface_open(ucp_worker_h worker, ucp_rsc_index_t tl_id,
 
     iface_params->field_mask |= UCT_IFACE_PARAM_FIELD_FEATURES;
     iface_params->features    = ucp_worker_get_uct_features(worker->context);
+
+    iface_params->field_mask |= UCT_IFACE_PARAM_FIELD_IFACE_FAILOVER;
+    iface_params->failover_upcall = ucp_worker_iface_failover_error_handler;
+
+    iface_params->field_mask |= UCT_IFACE_PARAM_FIELD_EP_FAILOVER;
+    iface_params->ep_failover_upcall = ucp_worker_ep_failover_error_handler;
 
     /* Open UCT interface */
     status = uct_iface_open(md, worker->uct, iface_params, iface_config,
@@ -2050,7 +2057,7 @@ ucs_status_t ucp_worker_get_ep_config(ucp_worker_h worker,
 
     /* Search for the given key in the ep_config array */
     ucs_array_for_each(ep_config, &worker->ep_config) {
-        if (ucp_ep_config_is_equal(&ep_config->key, key)) {
+        if (ucp_ep_config_is_equal(&ep_config->key, key, ep_init_flags)) {
             ep_cfg_index = ep_config - worker->ep_config.buffer;
             goto out;
         }
@@ -2326,6 +2333,7 @@ ucs_status_t ucp_worker_create(ucp_context_h context,
 
     worker->context              = context;
     worker->uuid                 = ucs_generate_uuid((uintptr_t)worker);
+    worker->machine_id           = ucs_machine_guid();
     worker->flush_ops_count      = 0;
     worker->inprogress           = 0;
     worker->rkey_config_count    = 0;
@@ -2808,7 +2816,8 @@ static ucs_status_t ucp_worker_address_pack(ucp_worker_h worker,
                                             void **address_p)
 {
     ucp_context_h context = worker->context;
-    unsigned flags        = ucp_worker_default_address_pack_flags(worker);
+    unsigned flags        = ucp_worker_default_address_pack_flags(worker) |
+                            UCP_ADDRESS_PACK_FLAG_TL_RSC_IDX;
     ucp_tl_bitmap_t tl_bitmap;
     ucp_rsc_index_t tl_id;
 

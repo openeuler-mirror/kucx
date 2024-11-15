@@ -220,6 +220,7 @@ typedef ucs_array_t(ucp_address_remote_device) ucp_address_remote_device_array_t
 
 #define UCP_ADDRESS_DEFAULT_WORKER_UUID     0
 #define UCP_ADDRESS_DEFAULT_CLIENT_ID       0
+#define UCP_ADDRESS_DEFAULT_MACHINE_ID       0
 
 enum {
     UCP_ADDRESS_HEADER_FLAG_DEBUG_INFO  = UCS_BIT(0),  /* Address has debug info */
@@ -368,6 +369,7 @@ ucp_address_gather_devices(ucp_worker_h worker, const ucp_ep_config_key_t *key,
                     dev->tl_addrs_size += !ucp_worker_is_unified_mode(worker);
                     dev->tl_addrs_size += iface_attr->ep_addr_len;
                     dev->tl_addrs_size += sizeof(uint8_t); /* lane index */
+                    dev->tl_addrs_size += sizeof(uint8_t); /* remote lane index */
                 }
             }
         }
@@ -440,6 +442,10 @@ ucp_address_packed_size(ucp_worker_h worker,
 
     if (pack_flags & UCP_ADDRESS_PACK_FLAG_WORKER_UUID) {
         size += sizeof(uint64_t);
+    }
+
+    if (pack_flags & UCP_ADDRESS_PACK_FLAG_MACHINE_ID) {
+        size += sizeof(uint64_t);   /* machine id */
     }
 
     if (pack_flags & UCP_ADDRESS_PACK_FLAG_CLIENT_ID) {
@@ -1110,6 +1116,7 @@ uint64_t ucp_address_get_client_id(const void *address)
 
     if (flags & UCP_ADDRESS_HEADER_FLAG_WORKER_UUID) {
         offset = UCS_PTR_TYPE_OFFSET(offset, uint64_t);
+        offset = UCS_PTR_TYPE_OFFSET(offset, uint64_t); /* machine id */
     }
 
     return *ucs_serialize_next(&offset, uint64_t);
@@ -1171,6 +1178,12 @@ ucp_address_do_pack(ucp_worker_h worker, ucp_ep_h ep, void *buffer, size_t size,
         *(uint64_t*)ptr = worker->uuid;
         ptr             = UCS_PTR_TYPE_OFFSET(ptr, uint64_t);
         addr_flags     |= UCP_ADDRESS_HEADER_FLAG_WORKER_UUID;
+    }
+
+    if (pack_flags & UCP_ADDRESS_PACK_FLAG_MACHINE_ID) {
+        *(uint64_t*)ptr = worker->machine_id;
+        ptr             = UCS_PTR_TYPE_OFFSET(ptr, uint64_t);
+        /* Reuse UCP_ADDRESS_HEADER_FLAG_WORKER_UUID because of byte-limit */
     }
 
     if (pack_flags & UCP_ADDRESS_PACK_FLAG_CLIENT_ID) {
@@ -1361,6 +1374,10 @@ ucp_address_do_pack(ucp_worker_h worker, ucp_ep_h ep, void *buffer, size_t size,
                     ep_lane_ptr  = ptr;
                     *ep_lane_ptr = remote_lane;
                     ptr          = UCS_PTR_TYPE_OFFSET(ptr, uint8_t);
+
+                    /* pass on remote lane */
+                    *(uint8_t*)ptr  = lane;
+                    ptr             = UCS_PTR_TYPE_OFFSET(ptr, uint8_t);
 
                     ucp_address_trace(
                             pack_flags,
@@ -1589,8 +1606,12 @@ ucs_status_t ucp_address_unpack(ucp_worker_t *worker, const void *buffer,
         unpacked_address->uuid = ucp_address_get_uuid(buffer);
         ptr                    = UCS_PTR_TYPE_OFFSET(ptr,
                                                      unpacked_address->uuid);
+        /* machine id */
+        unpacked_address->machine_id = *(uint64_t *)ptr;
+        ptr = UCS_PTR_TYPE_OFFSET(ptr, uint64_t);
     } else {
         unpacked_address->uuid = 0ul;
+        unpacked_address->machine_id = 0ul;
     }
 
     if (addr_flags & UCP_ADDRESS_HEADER_FLAG_CLIENT_ID) {
@@ -1722,16 +1743,21 @@ ucs_status_t ucp_address_unpack(ucp_worker_t *worker, const void *buffer,
                         ep_addr->lane);
 
                 ptr           = UCS_PTR_TYPE_OFFSET(ptr, uint8_t);
+                /* remote lane */
+                ep_addr->remote_lane = *(uint8_t*)ptr;
+                ptr           = UCS_PTR_TYPE_OFFSET(ptr, uint8_t);
             }
 
             ucp_address_trace(unpack_flags,
                               "unpack addr[%d] : sysdev %d paths %d eps %u"
+                              " dst_rsc_index %d"
                               " tl_iface_flags 0x%" PRIx64 " bw %.2f/nMBs"
                               " ovh %.0fns lat_ovh %.0fns dev_priority %d"
                               " a32 0x%" PRIx64 "/0x%" PRIx64 " a64 0x%" PRIx64
                               "/0x%" PRIx64,
                               (int)(address - address_list), address->sys_dev,
                               address->dev_num_paths, address->num_ep_addrs,
+                              address->iface_attr.dst_rsc_index,
                               address->iface_attr.flags,
                               address->iface_attr.bandwidth / UCS_MBYTE,
                               address->iface_attr.overhead * 1e9,

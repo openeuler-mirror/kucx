@@ -1,5 +1,6 @@
 /**
  * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2015. ALL RIGHTS RESERVED.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
  *
  * See file LICENSE for terms.
  */
@@ -35,6 +36,13 @@ enum {
     UCP_WIREUP_EP_FLAG_AUX_P2P          = UCS_BIT(4)
 };
 
+typedef struct ucp_wireup_failover_ext {
+    uint8_t             count;
+    uint8_t             cur_index;
+    // include all failover aux ep, [0] ref ucp_wireup_ep.aux_ep
+    uct_ep_h            all_aux_eps[UCP_MAX_LANES];
+    ucp_rsc_index_t     all_aux_rsc_indices[UCP_MAX_LANES];
+} ucp_wireup_failover_ext_t;
 
 /**
  * Wireup proxy endpoint, to hold off send requests until wireup process completes.
@@ -52,6 +60,7 @@ struct ucp_wireup_ep {
                                                         used only on the client side
                                                         in a client-server flow */
     ucp_rsc_index_t           aux_rsc_index; /**< Index of auxiliary transport */
+    ucp_wireup_failover_ext_t wireup_fo_ext;    /**< for wireup aux failover */
     volatile uint32_t         pending_count; /**< Number of pending wireup operations */
     volatile uint32_t         flags;         /**< Connection state flags */
     unsigned                  ep_init_flags; /**< UCP wireup EP init flags */

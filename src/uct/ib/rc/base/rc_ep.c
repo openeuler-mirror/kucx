@@ -51,8 +51,6 @@ static ucs_stats_class_t uct_rc_txqp_stats_class = {
 };
 #endif
 
-static ucs_status_t uct_rc_ep_check_progress(uct_pending_req_t *self);
-
 ucs_status_t uct_rc_txqp_init(uct_rc_txqp_t *txqp, uct_rc_iface_t *iface,
                               uint32_t qp_num
                               UCS_STATS_ARG(ucs_stats_node_t* stats_parent))
@@ -483,7 +481,7 @@ void uct_rc_txqp_purge_outstanding(uct_rc_iface_t *iface, uct_rc_txqp_t *txqp,
             /* Allow clean flush cancel op from destroy flow */
             if (warn &&
                 (op->handler != uct_rc_ep_flush_op_completion_handler)) {
-                ucs_warn("destroying txqp %p with uncompleted operation %p"
+                ucs_info("destroying txqp %p with uncompleted operation %p"
                          " handler %s",
                          txqp, op, ucs_debug_get_symbol_name(op->handler));
             }
@@ -583,7 +581,7 @@ static ucs_status_t uct_rc_ep_check_internal(uct_ep_h tl_ep)
     return UCS_OK;
 }
 
-static ucs_status_t uct_rc_ep_check_progress(uct_pending_req_t *self)
+ucs_status_t uct_rc_ep_check_progress(uct_pending_req_t *self)
 {
     uct_rc_pending_req_t *req = ucs_derived_of(self, uct_rc_pending_req_t);
     uct_rc_ep_t *ep           = ucs_derived_of(req->ep, uct_rc_ep_t);
@@ -661,6 +659,10 @@ uct_rc_ep_check(uct_ep_h tl_ep, unsigned flags, uct_completion_t *comp)
         } \
         \
         uct_invoke_completion(desc->super.user_comp, UCS_OK); \
+        if (desc->super.buf_info) { \
+            ucs_mpool_put(desc->super.buf_info); \
+            desc->super.buf_info = NULL; \
+        } \
         ucs_mpool_put(desc); \
   }
 
