@@ -1,6 +1,7 @@
 /**
 * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2021. ALL RIGHTS RESERVED.
 * Copyright (C) Huawei Technologies Co., Ltd. 2021.  ALL RIGHTS RESERVED.
+* Copyright (C) Huawei Technologies Co., Ltd. 2024.  ALL RIGHTS RESERVED.
 *
 * See file LICENSE for terms.
 */
@@ -331,6 +332,7 @@ void uct_rc_iface_send_desc_init(uct_iface_h tl_iface, void *obj, uct_mem_h memh
 
     desc->lkey        = uct_ib_memh_get_lkey(memh);
     desc->super.flags = 0;
+    desc->super.buf_info = NULL;
 }
 
 ucs_status_t uct_rc_init_fc_thresh(uct_rc_iface_config_t *config,
@@ -597,9 +599,7 @@ UCS_CLASS_INIT_FUNC(uct_rc_iface_t, uct_iface_ops_t *tl_ops,
                                                      "RETRY_COUNT",
                                                      config->tx.retry_count,
                                                      UCT_RC_QP_MAX_RETRY_COUNT);
-#if UCS_ENABLE_ASSERT
     self->tx.in_pending         = 0;
-#endif
     max_ib_msg_size             = uct_ib_iface_port_attr(&self->super)->max_msg_sz;
 
     if (md->ece_enable) {

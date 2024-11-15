@@ -286,6 +286,20 @@ typedef int          (*uct_iface_is_reachable_func_t)(const uct_iface_h iface,
                                                       const uct_device_addr_t *dev_addr,
                                                       const uct_iface_addr_t *iface_addr);
 
+typedef ucs_status_t (*uct_ep_get_private_date_func_t)(uct_ep_h tl_ep, uint64_t *private_data);
+
+typedef ucs_status_t (*uct_ep_resend_func_t)(uct_ep_h origin_ep, uint64_t acked_psn, uct_ep_h new_ep,
+                                             uct_rkey_ctx_t *rkey_ctx);
+
+typedef void (*uct_ep_pending_transfer_func_t)(uct_ep_h origin_ep, uct_ep_h new_ep);
+
+typedef void (*uct_iface_set_fault_flag_t)(uct_iface_h iface, unsigned status);
+
+typedef uint64_t (*uct_iface_get_device_guid_t)(uct_iface_h iface);
+
+typedef ucs_status_t (*uct_ep_pre_handle_func_t)(uct_ep_h origin_ep);
+
+typedef void (*uct_ep_set_fault_func_t)(uct_ep_h origin_ep, uct_ep_fault_status_t status);
 
 /**
  * Transport interface operations.
@@ -372,6 +386,14 @@ typedef struct uct_iface_ops {
     uct_iface_get_address_func_t        iface_get_address;
     uct_iface_is_reachable_func_t       iface_is_reachable;
 
+    /* interface - multilane failover */
+    uct_ep_get_private_date_func_t      ep_get_private_date;
+    uct_ep_resend_func_t                ep_resend;
+    uct_ep_pending_transfer_func_t      ep_pending_transfer;
+    uct_iface_set_fault_flag_t          iface_set_fault_flag;
+    uct_iface_get_device_guid_t         iface_get_device_guid;
+    uct_ep_pre_handle_func_t            ep_pre_handle;
+    uct_ep_set_fault_func_t             ep_set_fault;
 } uct_iface_ops_t;
 
 

@@ -20,13 +20,15 @@ noinst_HEADERS = \
 	base/ib_iface.h \
 	base/ib_log.h \
 	base/ib_md.h \
-	base/ib_verbs.h
+	base/ib_verbs.h \
+    base/ib_failover.h
 
 libuct_ib_la_SOURCES = \
 	base/ib_device.c \
 	base/ib_iface.c \
 	base/ib_log.c \
-	base/ib_md.c
+	base/ib_md.c \
+    base/ib_failover.c
 
 # TODO separate module for mlx5
 if HAVE_MLX5_DV
@@ -55,14 +57,20 @@ noinst_HEADERS += \
 	rc/base/rc_def.h \
 	rc/base/rc_ep.h \
 	rc/base/rc_iface.h \
+    rc/base/rc_failover.h \
 	rc/verbs/rc_verbs.h \
-	rc/verbs/rc_verbs_impl.h
+	rc/verbs/rc_verbs_impl.h \
+    rc/failover/rc_failover.h
 
 libuct_ib_la_SOURCES += \
 	rc/base/rc_ep.c \
 	rc/base/rc_iface.c \
+    rc/base/rc_failover.c \
 	rc/verbs/rc_verbs_ep.c \
-	rc/verbs/rc_verbs_iface.c
+	rc/verbs/rc_verbs_iface.c \
+    rc/failover/rc_failover_ep.c \
+    rc/failover/rc_failover_iface.c \
+    rc/failover/rc_failover_resend.c
 
 if HAVE_MLX5_DV
 noinst_HEADERS += \

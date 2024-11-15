@@ -81,6 +81,10 @@ ucs_status_t ucp_rma_request_advance(ucp_request_t *req, ssize_t frag_length,
             return UCS_ERR_NO_RESOURCE;
         }
 
+        if (status == UCS_ERR_BUSY) {
+            return UCS_ERR_BUSY;
+        }
+
         return UCS_OK;
     }
 
@@ -265,7 +269,7 @@ ucs_status_ptr_t ucp_put_nbx(ucp_ep_h ep, const void *buffer, size_t count,
 
     if (worker->context->config.ext.proto_enable) {
         status = ucp_put_send_short(ep, buffer, count, remote_addr, rkey, param);
-        if (ucs_likely(status != UCS_ERR_NO_RESOURCE)) {
+        if (ucs_likely(status != UCS_ERR_NO_RESOURCE && status != UCS_ERR_BUSY)) {
             ret = UCS_STATUS_PTR(status);
             goto out_unlock;
         }
@@ -303,7 +307,7 @@ ucs_status_ptr_t ucp_put_nbx(ucp_ep_h ep, const void *buffer, size_t count,
                     uct_ep_put_short,
                     ucp_ep_get_fast_lane(ep, rkey->cache.rma_lane), buffer,
                     count, remote_addr, rkey->cache.rma_rkey);
-            if (ucs_likely(status != UCS_ERR_NO_RESOURCE)) {
+            if (ucs_likely(status != UCS_ERR_NO_RESOURCE && status != UCS_ERR_BUSY)) {
                 ret = UCS_STATUS_PTR(status);
                 goto out_unlock;
             }

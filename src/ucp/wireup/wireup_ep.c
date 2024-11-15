@@ -1,5 +1,6 @@
 /**
  * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2019. ALL RIGHTS RESERVED.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
  *
  * See file LICENSE for terms.
  */
@@ -21,6 +22,7 @@
 #include <ucp/core/ucp_ep.inl>
 #include <ucp/core/ucp_request.inl>
 
+#define AUX_WIREUP_MAX_LANE     4
 
 UCS_CLASS_DECLARE(ucp_wireup_ep_t, ucp_ep_h, const ucp_rsc_index_t*);
 
@@ -59,6 +61,11 @@ uct_ep_h ucp_wireup_ep_get_msg_ep(ucp_wireup_ep_t *wireup_ep)
     if ((wireup_ep->flags & UCP_WIREUP_EP_FLAG_READY) || (wireup_ep->aux_ep == NULL)) {
         wireup_msg_ep = wireup_ep->super.uct_ep;
     } else {
+        wireup_msg_ep = wireup_ep->aux_ep;
+    }
+    if (wireup_ep->super.ucp_ep->worker->context->config.ext.max_aux_lanes > 1 &&
+        wireup_ep->aux_ep != NULL &&
+        !(wireup_ep->super.ucp_ep->flags & UCP_EP_FLAG_WIREUP_DONE)) {
         wireup_msg_ep = wireup_ep->aux_ep;
     }
     ucs_assertv(wireup_msg_ep != NULL,
@@ -213,6 +220,100 @@ void ucp_wireup_ep_set_aux(ucp_wireup_ep_t *wireup_ep, uct_ep_h uct_ep,
     }
 }
 
+static inline void
+ucp_wireup_ep_set_aux_ex(ucp_wireup_ep_t *wireup_ep, uct_ep_h uct_ep,
+                         ucp_rsc_index_t rsc_index, int index)
+{
+    ucs_assert(!ucp_wireup_ep_test(uct_ep));
+    wireup_ep->wireup_fo_ext.all_aux_eps[index]         = uct_ep;
+    wireup_ep->wireup_fo_ext.all_aux_rsc_indices[index] = rsc_index;
+}
+
+static ucs_status_t
+ucp_wireup_ep_aux_failover_connect(ucp_wireup_ep_t *wireup_ep, unsigned ep_init_flags,
+                                   ucp_rsc_index_t used_rsc_index, const ucp_unpacked_address_t *remote_address)
+{
+    ucp_ep_h ucp_ep                      = wireup_ep->super.ucp_ep;
+    ucp_worker_h worker                  = ucp_ep->worker;
+    ucp_context_h context                = worker->context;
+    ucp_wireup_select_info_t select_info = {0};
+    uct_ep_params_t uct_ep_params;
+    const ucp_address_entry_t *aux_addr;
+    ucp_worker_iface_t *wiface;
+    ucs_status_t status;
+    uct_ep_h uct_ep;
+    uint64_t local_dev_bitmap = UINT64_MAX;
+    uint64_t remote_dev_bitmap = UINT64_MAX;
+    ucp_rsc_index_t local_dev_index;
+    ucp_rsc_index_t remote_dev_index;
+    int i = wireup_ep->wireup_fo_ext.count;
+
+    local_dev_index  = context->tl_rscs[used_rsc_index].dev_index;
+    remote_dev_index = remote_address->address_list[used_rsc_index].dev_index;
+    local_dev_bitmap  &= ~UCS_BIT(local_dev_index);
+    remote_dev_bitmap &= ~UCS_BIT(remote_dev_index);
+
+    for (; i < worker->context->config.ext.max_aux_lanes; i++) {
+        if (wireup_ep->wireup_fo_ext.count >= AUX_WIREUP_MAX_LANE) {
+            break;
+        }
+        status = ucp_wireup_select_aux_transport_with_bitmap(ucp_ep, ep_init_flags,
+                                                             ucp_tl_bitmap_max, remote_address,
+                                                             local_dev_bitmap,
+                                                             remote_dev_bitmap,
+                                                             &select_info);
+        if (ucs_unlikely(status != UCS_OK)) {
+            ucs_info("failover aux select with bitmap %d", status);
+            break;
+        }
+
+        aux_addr         = &remote_address->address_list[select_info.addr_index];
+        wiface           = ucp_worker_iface(worker, select_info.rsc_index);
+        /* create auxiliary endpoint connected to the remote iface. */
+        uct_ep_params.field_mask = UCT_EP_PARAM_FIELD_IFACE    |
+                                UCT_EP_PARAM_FIELD_DEV_ADDR |
+                                UCT_EP_PARAM_FIELD_IFACE_ADDR;
+        uct_ep_params.iface      = wiface->iface;
+        uct_ep_params.dev_addr   = aux_addr->dev_addr;
+        uct_ep_params.iface_addr = aux_addr->iface_addr;
+        status = uct_ep_create(&uct_ep_params, &uct_ep);
+        if (status != UCS_OK) {
+            ucs_error("ep %p cannot create aux ext ep rsc %u ret %d", ucp_ep, select_info.rsc_index, status);
+            local_dev_index  = context->tl_rscs[select_info.rsc_index].dev_index;
+            remote_dev_index = remote_address->address_list[select_info.addr_index].dev_index;
+            local_dev_bitmap  &= ~UCS_BIT(local_dev_index);
+            remote_dev_bitmap &= ~UCS_BIT(remote_dev_index);
+            continue;
+        }
+
+        if (i == 0) {
+            ucp_wireup_ep_set_aux(wireup_ep, uct_ep, select_info.rsc_index, 0);
+        }
+
+        ucp_wireup_ep_set_aux_ex(wireup_ep, uct_ep, select_info.rsc_index, wireup_ep->wireup_fo_ext.count);
+
+        ucp_worker_iface_progress_ep(wiface);
+
+        ucs_info("ep %p: wireup_ep %p created extended aux_ep[%d] %p to %s using "
+                 UCT_TL_RESOURCE_DESC_FMT, ucp_ep, wireup_ep, wireup_ep->wireup_fo_ext.count, uct_ep,
+                 ucp_ep_peer_name(ucp_ep),
+                 UCT_TL_RESOURCE_DESC_ARG(&worker->context->tl_rscs[select_info.rsc_index].tl_rsc));
+
+        wireup_ep->wireup_fo_ext.count++;
+        local_dev_index  = context->tl_rscs[select_info.rsc_index].dev_index;
+        remote_dev_index = remote_address->address_list[select_info.addr_index].dev_index;
+        local_dev_bitmap  &= ~UCS_BIT(local_dev_index);
+        remote_dev_bitmap &= ~UCS_BIT(remote_dev_index);
+    }
+
+    if (wireup_ep->wireup_fo_ext.count == 0) {
+        ucs_error("no available aux device to use");
+        return UCS_ERR_NO_RESOURCE;
+    }
+
+    return UCS_OK;
+}
+
 static ucs_status_t
 ucp_wireup_ep_connect_aux(ucp_wireup_ep_t *wireup_ep, unsigned ep_init_flags,
                           const ucp_unpacked_address_t *remote_address)
@@ -248,7 +349,19 @@ ucp_wireup_ep_connect_aux(ucp_wireup_ep_t *wireup_ep, unsigned ep_init_flags,
     uct_ep_params.iface_addr = aux_addr->iface_addr;
     status = uct_ep_create(&uct_ep_params, &uct_ep);
     if (status != UCS_OK) {
+        ucs_error("ep %p cannot connect aux rsc %u %d", ucp_ep, select_info.rsc_index, status);
         /* coverity[leaked_storage] */
+        if (worker->context->config.ext.max_aux_lanes <= 1) {
+            ucs_error("ep connect aux failed because of some faults, maybe you can config UCX_MAX_AUX_RAILS to > 1");
+            return status;
+        }
+        /* > 1 */
+        wireup_ep->wireup_fo_ext.count = 0;
+        wireup_ep->wireup_fo_ext.cur_index = 0;
+        status = ucp_wireup_ep_aux_failover_connect(wireup_ep, ep_init_flags, select_info.rsc_index, remote_address);
+        if (status != UCS_OK) {
+            ucs_error("cannot create multi failover aux %d", status);
+        }
         return status;
     }
 
@@ -256,10 +369,23 @@ ucp_wireup_ep_connect_aux(ucp_wireup_ep_t *wireup_ep, unsigned ep_init_flags,
 
     ucp_worker_iface_progress_ep(wiface);
 
-    ucs_debug("ep %p: wireup_ep %p created aux_ep %p to %s using "
+    ucs_info("ep %p: wireup_ep %p created aux_ep %p to %s using "
               UCT_TL_RESOURCE_DESC_FMT, ucp_ep, wireup_ep, wireup_ep->aux_ep,
               ucp_ep_peer_name(ucp_ep),
               UCT_TL_RESOURCE_DESC_ARG(&worker->context->tl_rscs[select_info.rsc_index].tl_rsc));
+
+    /* check if enable aux wireup failover */
+    if (worker->context->config.ext.max_aux_lanes > 1) {
+        wireup_ep->wireup_fo_ext.count = 1;
+        wireup_ep->wireup_fo_ext.cur_index = 0;
+        ucp_wireup_ep_set_aux_ex(wireup_ep, uct_ep, select_info.rsc_index, 0);
+        status = ucp_wireup_ep_aux_failover_connect(wireup_ep, ep_init_flags, select_info.rsc_index, remote_address);
+        if (status != UCS_OK) {
+            ucs_error("cannot create multi failover aux %d", status);
+            uct_ep_destroy(uct_ep);
+            return status;
+        }
+    }
 
     return UCS_OK;
 }
@@ -271,8 +397,21 @@ void ucp_wireup_ep_discard_aux_ep(ucp_wireup_ep_t *wireup_ep,
 {
     ucp_ep_h ucp_ep     = wireup_ep->super.ucp_ep;
     uct_ep_h aux_ep     = wireup_ep->aux_ep;
+    uint32_t i;
 
     if (aux_ep == NULL) {
+        return;
+    }
+
+    if (ucp_ep->worker->context->config.ext.max_aux_lanes > 1) {
+        for (i = 0; i < wireup_ep->wireup_fo_ext.count; i++) {
+            ucp_wireup_ep_disown(&wireup_ep->super.super, wireup_ep->wireup_fo_ext.all_aux_eps[i]);
+            ucp_worker_discard_uct_ep(ucp_ep, wireup_ep->wireup_fo_ext.all_aux_eps[i],
+                                      wireup_ep->wireup_fo_ext.all_aux_rsc_indices[i],
+                                      ep_flush_flags, purge_cb, purge_arg,
+                                      (ucp_send_nbx_callback_t)ucs_empty_function,
+                                      NULL);
+        }
         return;
     }
 
@@ -379,11 +518,18 @@ UCS_CLASS_INIT_FUNC(ucp_wireup_ep_t, ucp_ep_h ucp_ep,
         .ep_atomic_cswap32   = (uct_ep_atomic_cswap32_func_t)ucs_empty_function_return_no_resource
     };
     ucp_lane_index_t lane;
+    uint8_t i;
 
     UCS_CLASS_CALL_SUPER_INIT(ucp_proxy_ep_t, &ops, ucp_ep, NULL, 0);
 
     self->aux_ep        = NULL;
     self->aux_rsc_index = UCP_NULL_RESOURCE;
+    for (i = 0; i < UCP_MAX_LANES; i++) {
+        self->wireup_fo_ext.all_aux_eps[i] = NULL;
+        self->wireup_fo_ext.all_aux_rsc_indices[i] = UCP_NULL_RESOURCE;
+    }
+    self->wireup_fo_ext.count = 0;
+    self->wireup_fo_ext.cur_index = 0;
     self->pending_count = 0;
     self->flags         = 0;
     ucs_queue_head_init(&self->pending_q);

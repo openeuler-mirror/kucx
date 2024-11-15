@@ -14,6 +14,67 @@
 
 #include <ucp/proto/proto_am.inl>
 
+static void
+ucp_rma_basic_bcopy_completion(uct_completion_t *self)
+{
+    ucp_request_t *req = ucs_container_of(self, ucp_request_t,
+                                          send.state.uct_comp);
+    if (ucs_likely(req->send.length == req->send.state.dt.offset)) {
+        ucp_send_request_id_release(req);
+        ucp_request_complete_send(req, self->status);
+    }
+}
+
+static void
+ucp_rma_basic_zcopy_completion(uct_completion_t *self)
+{
+    ucp_request_t *req = ucs_container_of(self, ucp_request_t,
+                                          send.state.uct_comp);
+    if (ucs_likely(req->send.length == req->send.state.dt.offset)) {
+        ucp_send_request_id_release(req);
+        ucp_request_send_buffer_dereg(req);
+        ucp_request_complete_send(req, self->status);
+    }
+}
+
+/*
+ * when rma switches the lane, cb function needs to be reset based on the threshold,
+ * and mem handle needs to be re-reg
+ */
+ucs_status_t
+ucp_rma_change_memh(ucp_ep_t *ep, ucp_request_t *req, ucp_lane_index_t origin_lane,
+                    ucp_lane_index_t new_lane, int is_put)
+{
+    ucp_ep_rma_config_t *origin_rma_config = &ucp_ep_config(ep)->rma[origin_lane];
+    ucp_ep_rma_config_t *new_rma_config = &ucp_ep_config(ep)->rma[new_lane];
+    size_t origin_zcopy_thresh;
+    size_t new_zcopy_thresh;
+    if (is_put) {
+        origin_zcopy_thresh = origin_rma_config->put_zcopy_thresh;
+        new_zcopy_thresh = new_rma_config->put_zcopy_thresh;
+    } else {
+        origin_zcopy_thresh = origin_rma_config->get_zcopy_thresh;
+        new_zcopy_thresh = new_rma_config->get_zcopy_thresh;
+    }
+
+    if (req->send.length >= origin_zcopy_thresh) {
+        /* dereg mem handle registered before */
+        ucp_request_send_buffer_dereg(req);
+    }
+
+    ucp_request_send_state_reset(req,
+                                 (req->send.length < new_zcopy_thresh) ?
+                                 ucp_rma_basic_bcopy_completion :
+                                 ucp_rma_basic_zcopy_completion,
+                                 UCP_REQUEST_SEND_PROTO_RMA);
+
+    if (req->send.length < new_zcopy_thresh) {
+        return UCS_OK;
+    }
+    req->flags &= ~UCP_REQUEST_FLAG_USER_MEMH;
+
+    return ucp_request_send_buffer_reg_lane(req, req->send.lane, 0);
+}
 
 static ucs_status_t ucp_rma_basic_progress_put(uct_pending_req_t *self)
 {
@@ -21,12 +82,27 @@ static ucs_status_t ucp_rma_basic_progress_put(uct_pending_req_t *self)
     ucp_ep_t *ep                    = req->send.ep;
     ucp_rkey_h rkey                 = req->send.rma.rkey;
     ucp_lane_index_t lane           = req->send.lane;
+    ucp_lane_index_t origin_lane;
     ucp_ep_rma_config_t *rma_config = &ucp_ep_config(ep)->rma[lane];
     ucs_status_t status;
     ssize_t packed_len;
 
-    ucs_assert(rkey->cache.ep_cfg_index == ep->cfg_index);
-    ucs_assert(rkey->cache.rma_lane == lane);
+    if (ucs_unlikely(rkey->cache.ep_cfg_index != ep->cfg_index)) {
+        /* failover done, update rkey cache */
+        ucp_rkey_resolve_inner(rkey, ep);
+    }
+    if (ucs_unlikely(rkey->cache.rma_lane != lane)) {
+        origin_lane = lane;
+        req->send.lane = rkey->cache.rma_lane;
+        lane = req->send.lane;
+        rma_config = &ucp_ep_config(ep)->rma[lane];
+        status = ucp_rma_change_memh(ep, req, origin_lane, lane, 1);
+        if (status != UCS_OK) {
+            ucs_error("ep %p put change memh failed status %d", ep, status);
+            req->send.lane = origin_lane;
+            return status;
+        }
+    }
 
     if (((ssize_t)req->send.length <= rma_config->max_put_short) ||
         (req->send.length <= ucp_ep_config(ep)->bcopy_thresh))
@@ -75,12 +151,27 @@ static ucs_status_t ucp_rma_basic_progress_get(uct_pending_req_t *self)
     ucp_ep_t *ep                    = req->send.ep;
     ucp_rkey_h rkey                 = req->send.rma.rkey;
     ucp_lane_index_t lane           = req->send.lane;
+    ucp_lane_index_t origin_lane;
     ucp_ep_rma_config_t *rma_config = &ucp_ep_config(ep)->rma[lane];
     ucs_status_t status;
     size_t frag_length;
 
-    ucs_assert(rkey->cache.ep_cfg_index == ep->cfg_index);
-    ucs_assert(rkey->cache.rma_lane == lane);
+    if (ucs_unlikely(rkey->cache.ep_cfg_index != ep->cfg_index)) {
+        /* failover done, update rkey cache */
+        ucp_rkey_resolve_inner(rkey, ep);
+    }
+    if (ucs_unlikely(rkey->cache.rma_lane != lane)) {
+        origin_lane = lane;
+        req->send.lane = rkey->cache.rma_lane;
+        lane = req->send.lane;
+        rma_config = &ucp_ep_config(ep)->rma[lane];
+        status = ucp_rma_change_memh(ep, req, origin_lane, lane, 0);
+        if (status != UCS_OK) {
+            ucs_error("ep %p get change memh failed status %d", ep, status);
+            req->send.lane = origin_lane;
+            return status;
+        }
+    }
 
     if (ucs_likely((ssize_t)req->send.length < rma_config->get_zcopy_thresh)) {
         frag_length = ucs_min(rma_config->max_get_bcopy, req->send.length);

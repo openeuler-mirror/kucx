@@ -1,6 +1,7 @@
 /**
  * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2020. ALL RIGHTS RESERVED.
  * Copyright (C) Los Alamos National Security, LLC. 2019 ALL RIGHTS RESERVED.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
  *
  * See file LICENSE for terms.
  */
@@ -22,6 +23,7 @@
 #include <ucs/debug/assert.h>
 #include <ucs/stats/stats.h>
 
+#include "ucp_failover.h"
 
 #define UCP_MAX_IOV                16UL
 
@@ -113,6 +115,8 @@ enum {
     UCP_EP_FLAG_INDIRECT_ID            = UCS_BIT(14),/* protocols on this endpoint will send
                                                         indirect endpoint id instead of pointer,
                                                         can be replaced with looking at local ID */
+    /* failover */
+    UCP_EP_FLAG_WIREUP_DONE            = UCS_BIT(15),/* for wireup failover */
 
     /* DEBUG bits */
     UCP_EP_FLAG_CONNECT_REQ_SENT       = UCS_BIT(16),/* DEBUG: Connection request was sent */
@@ -164,8 +168,9 @@ enum {
     UCP_EP_INIT_CREATE_AM_LANE_ONLY    = UCS_BIT(8),  /**< Endpoint requires an AM lane only */
     UCP_EP_INIT_KA_FROM_EXIST_LANES    = UCS_BIT(9),  /**< Use only existing lanes to create
                                                            keepalive lane */
-    UCP_EP_INIT_ALLOW_AM_AUX_TL        = UCS_BIT(10)  /**< Endpoint allows selecting of auxiliary
+    UCP_EP_INIT_ALLOW_AM_AUX_TL        = UCS_BIT(10),  /**< Endpoint allows selecting of auxiliary
                                                            transports for AM lane */
+    UCP_EP_INIT_RESELECE_WIREUP        = UCS_BIT(11)   /**< Endpoint need to reselect wireup lane */
 };
 
 
@@ -549,6 +554,14 @@ typedef struct ucp_ep {
     uct_ep_h                      uct_eps[UCP_MAX_FAST_PATH_LANES];
     ucp_ep_ext_t                  *ext;                   /* Endpoint extension */
 
+    // failover
+    ucp_failover_ctx_t            failover_ctx;                 // save failover ctx
+    ucp_lane_index_t              lanes2remote[UCP_MAX_LANES];  // cache lanes2remote
+    ucp_rsc_index_t               lanes2dst_rsc[UCP_MAX_LANES]; // cache lanes2dest_rsc for generate lanes2remote
+    ucs_bitmap_t(64)              discarded_rsc_bitmap;         // blacklist
+    ucs_bitmap_t(64)              discarded_lane_bitmap;        // lane blacklist, for ep fault, not iface fault
+    ucs_time_t                    wireup_chk_time;              /* wireup timeout */
+
 #if ENABLE_DEBUG_DATA
     char                          peer_name[UCP_WORKER_ADDRESS_NAME_MAX];
     /* Endpoint name for tracing and analysis */
@@ -739,7 +752,8 @@ void ucp_ep_config_lanes_intersect(const ucp_ep_config_key_t *key1,
                                    ucp_lane_index_t *lane_map);
 
 int ucp_ep_config_is_equal(const ucp_ep_config_key_t *key1,
-                           const ucp_ep_config_key_t *key2);
+                           const ucp_ep_config_key_t *key2,
+                           unsigned ep_init_flags);
 
 void ucp_ep_config_name(ucp_worker_h worker, ucp_worker_cfg_index_t cfg_index,
                         ucs_string_buffer_t *strb);

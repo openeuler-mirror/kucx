@@ -254,6 +254,22 @@ typedef void (*uct_ib_iface_handle_failure_func_t)(uct_ib_iface_t *iface, void *
 typedef ucs_status_t (*uct_ib_iface_set_ep_failed_func_t)(uct_ib_iface_t *iface, uct_ep_h ep,
                                                           ucs_status_t status);
 
+typedef void (*uct_iface_failure_handle_func_t)(uct_ib_iface_t *ib_iface);
+
+typedef ucs_status_t (*uct_ep_failure_handle_func_t)(uct_ep_h uct_ep);
+
+typedef struct uct_ib_failover_ops {
+    uct_iface_failure_handle_func_t iface_failure_handle;   /* iface failover handler */
+    uct_ep_failure_handle_func_t    ep_failure_handle;      /* ep failover handler */
+    uct_iface_error_handler_t       failover_upcall;        /* failover upcall */
+    uct_ep_error_handler_t          ep_failover_upcall;        /* ep failover upcall */
+} uct_ib_failover_ops_t;
+
+typedef struct uct_ib_failover_interface {
+    uct_ib_failover_ops_t   ops;                /* ib failover ops */
+    void                    *err_handler_arg;
+    uct_worker_cb_id_t      failover_prog_id;
+} uct_ib_failover_interface_t;
 
 struct uct_ib_iface_ops {
     uct_iface_internal_ops_t           super;
@@ -301,6 +317,7 @@ struct uct_ib_iface {
     } config;
 
     uct_ib_iface_ops_t        *ops;
+    uct_ib_failover_interface_t failover;   /* for failover */
     UCS_STATS_NODE_DECLARE(stats)
 };
 

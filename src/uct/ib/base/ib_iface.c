@@ -2,7 +2,7 @@
 * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2021. ALL RIGHTS RESERVED.
 * Copyright (C) 2021 Broadcom. ALL RIGHTS RESERVED. The term "Broadcom"
 * refers to Broadcom Inc. and/or its subsidiaries.
-* Copyright (C) Huawei Technologies Co., Ltd. 2020-2024.  ALL RIGHTS RESERVED.
+* Copyright (C) Huawei Technologies Co., Ltd. 2024.  ALL RIGHTS RESERVED.
 *
 * See file LICENSE for terms.
 */
@@ -13,6 +13,7 @@
 
 #include "ib_iface.h"
 #include "ib_log.h"
+#include "ib_failover.h"
 
 #include <uct/tcp/tcp.h>
 #include <uct/base/uct_md.h>
@@ -1058,10 +1059,10 @@ ucs_status_t uct_ib_verbs_create_cq(uct_ib_iface_t *iface, uct_ib_dir_t dir,
     } else {
 #if HAVE_DECL_IBV_CREATE_CQ_EX
 
-    uct_ib_fill_cq_attr(&cq_attr, init_attr, iface, preferred_cpu, cq_size);
+        uct_ib_fill_cq_attr(&cq_attr, init_attr, iface, preferred_cpu, cq_size);
 
-    cq = ibv_cq_ex_to_cq(ibv_create_cq_ex(dev->ibv_context, &cq_attr));
-    if (!cq && ((errno == EOPNOTSUPP) || (errno == ENOSYS)))
+        cq = ibv_cq_ex_to_cq(ibv_create_cq_ex(dev->ibv_context, &cq_attr));
+        if (!cq && ((errno == EOPNOTSUPP) || (errno == ENOSYS)))
 #endif
         {
             iface->config.max_inl_cqe[dir] = 0;
@@ -1442,6 +1443,14 @@ UCS_CLASS_INIT_FUNC(uct_ib_iface_t, uct_iface_ops_t *tl_ops,
     }
 
     self->addr_size  = uct_ib_iface_address_size(self);
+
+    // failover
+    self->failover.ops.failover_upcall = params->failover_upcall;
+    self->failover.ops.ep_failover_upcall = params->ep_failover_upcall;
+    self->failover.err_handler_arg = params->err_handler_arg;
+    self->failover.ops.iface_failure_handle = uct_ib_iface_failure_handle;
+    self->failover.failover_prog_id = UCS_CALLBACKQ_ID_NULL;
+    self->failover.ops.ep_failure_handle = uct_ep_failure_handle;
 
     ucs_debug("created uct_ib_iface_t headroom_ofs %d payload_ofs %d hdr_ofs %d data_sz %d",
               self->config.rx_headroom_offset, self->config.rx_payload_offset,
