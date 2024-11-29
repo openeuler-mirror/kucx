@@ -276,13 +276,28 @@ static ucs_status_t uct_tcp_iface_query(uct_iface_h tl_iface,
 
     uct_base_iface_query(&iface->super, attr);
 
-    status = uct_tcp_netif_caps(iface->if_name, &attr->latency.c, &network_bw);
+    /* cache iface caps */
+    if (iface->if_query_flag) {
+        attr->latency.c = iface->if_latency;
+        network_bw = iface->if_bw;
+        status = UCS_OK;
+    } else {
+        status = uct_tcp_netif_caps(iface->if_name, &attr->latency.c, &network_bw);
+        iface->if_latency = attr->latency.c;
+        iface->if_bw = network_bw;
+    }
     if (status != UCS_OK) {
         return status;
     }
 
-    sysfs_path             = uct_tcp_iface_get_sysfs_path(iface->if_name, path_buffer);
-    pci_bw                 = ucs_topo_get_pci_bw(iface->if_name, sysfs_path);
+    /* cache pci bw */
+    if (iface->if_query_flag) {
+        pci_bw             = iface->if_pci_bw;
+    } else {
+        sysfs_path         = uct_tcp_iface_get_sysfs_path(iface->if_name, path_buffer);
+        pci_bw             = ucs_topo_get_pci_bw(iface->if_name, sysfs_path);
+        iface->if_pci_bw   = pci_bw;
+    }
     calculated_bw          = ucs_min(pci_bw, network_bw);
 
     /* Bandwidth is bounded by TCP stack computation time */
@@ -335,8 +350,15 @@ static ucs_status_t uct_tcp_iface_query(uct_iface_h tl_iface,
     attr->latency.m           = 0;
     attr->overhead            = 50e-6;  /* 50 usec */
 
+    /* cache route */
     if (iface->config.prefer_default) {
-        status = uct_tcp_netif_is_default(iface->if_name, &is_default);
+        if (iface->if_query_flag) {
+            is_default = iface->net_if_is_default;
+            status = UCS_OK;
+        } else {
+            status = uct_tcp_netif_is_default(iface->if_name, &is_default);
+            iface->net_if_is_default = is_default;
+        }
         if (status != UCS_OK) {
              return status;
         }
@@ -345,6 +367,7 @@ static ucs_status_t uct_tcp_iface_query(uct_iface_h tl_iface,
     } else {
         attr->priority    = 0;
     }
+    iface->if_query_flag  = 1;
 
     return UCS_OK;
 }
@@ -703,6 +726,7 @@ static UCS_CLASS_INIT_FUNC(uct_tcp_iface_t, uct_md_h md, uct_worker_h worker,
     self->config.keepalive.intvl   = config->keepalive.intvl;
     self->port_range.first         = config->port_range.first;
     self->port_range.last          = config->port_range.last;
+    self->if_query_flag            = 0;
 
     if (config->keepalive.idle != UCS_MEMUNITS_AUTO) {
         /* TCP iface configuration sets the keepalive interval */
