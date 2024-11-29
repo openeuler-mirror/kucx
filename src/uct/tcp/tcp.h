@@ -372,6 +372,13 @@ typedef struct uct_tcp_iface {
                                                       * CONNECT_TO_EP method */
     ucs_list_link_t               ep_list;           /* List of endpoints */
     char                          if_name[IFNAMSIZ]; /* Network interface name */
+    /* cache for init performance */
+    int                           if_query_flag;
+    double                        if_latency;
+    double                        if_bw;
+    double                        if_pci_bw;
+    int                           net_if_is_default;
+
     ucs_sys_event_set_t           *event_set;        /* Event set identifier */
     ucs_mpool_t                   tx_mpool;          /* TX memory pool */
     ucs_mpool_t                   rx_mpool;          /* RX memory pool */
