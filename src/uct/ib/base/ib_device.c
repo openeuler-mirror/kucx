@@ -946,7 +946,8 @@ skip_malloc:
             gid_entry = &entries[i];
             ucs_assert(gid_entry != NULL);
 
-            if (!((roce_prio[prio_idx].ver == UCT_IB_DEVICE_ROCE_V1 && gid_entry->gid_type == IBV_GID_TYPE_ROCE_V1) || (roce_prio[prio_idx].ver == UCT_IB_DEVICE_ROCE_V2 && gid_entry->gid_type == IBV_GID_TYPE_ROCE_V2))) {
+            if (!((roce_prio[prio_idx].ver == UCT_IB_DEVICE_ROCE_V1 && gid_entry->gid_type == IBV_GID_TYPE_ROCE_V1) ||
+                  (roce_prio[prio_idx].ver == UCT_IB_DEVICE_ROCE_V2 && gid_entry->gid_type == IBV_GID_TYPE_ROCE_V2))) {
                 continue;
             }
 
