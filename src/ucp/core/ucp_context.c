@@ -225,7 +225,7 @@ static ucs_config_field_t ucp_context_config_table[] = {
    "Aux wireup timeout threshold, affected only when UCX_MAX_AUX_RAILS is greater than 1",
    ucs_offsetof(ucp_context_config_t, aux_timeout), UCS_CONFIG_TYPE_TIME},
 
-  {"LOCAL_CONN_SAME_DEV", "y",
+  {"LOCAL_CONN_SAME_DEV", "n",
    "When local processes wireup with each other, the same device is selected\n"
    "on the one hand, to narrow down the fault scope\n"
    "on the other hand, if device supports loopback, performance should be better",

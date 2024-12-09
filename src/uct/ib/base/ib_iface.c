@@ -1093,10 +1093,16 @@ void uct_ib_verbs_destroy_cq(uct_ib_iface_t *iface, uct_ib_dir_t dir)
 static unsigned uct_ib_iface_roce_lag_level(uct_ib_iface_t *iface)
 {
     uct_ib_device_t *dev = uct_ib_iface_device(iface);
+    unsigned lag_level;
 
-    return (dev->lag_level != 0) ? dev->lag_level :
+    lag_level = (dev->lag_level != 0) ? dev->lag_level :
            uct_ib_device_get_roce_lag_level(dev, iface->config.port_num,
                                             iface->gid_info.gid_index);
+    // cache lag level
+    if (ucs_unlikely(dev->lag_level == 0)) {
+        dev->lag_level = lag_level;
+    }
+    return lag_level;
 }
 
 static void uct_ib_iface_set_num_paths(uct_ib_iface_t *iface,
