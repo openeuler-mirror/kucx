@@ -163,6 +163,11 @@ typedef struct uct_ib_device_spec {
 } uct_ib_device_spec_t;
 
 
+typedef struct uct_hns_device_spec {
+    uint32_t                    vendor;
+    uint32_t                    device;
+} uct_hns_device_spec_t;
+
 KHASH_TYPE(uct_ib_ah, struct ibv_ah_attr, struct ibv_ah*);
 
 
