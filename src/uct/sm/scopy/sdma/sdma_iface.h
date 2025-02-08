@@ -20,6 +20,7 @@
 
 typedef struct uct_sdma_req {
     sdma_sqe_task_t task;
+    sdma_request_t request; 
     uct_completion_t *comp;
     int is_over;
     int result;
@@ -37,6 +38,7 @@ typedef struct uct_sdma_iface_config {
     uct_iface_config_t super;
     size_t seg_size;            /* Maximal send size */
     double bw;                  /* BW for SDMA */
+    int shared_mode;            /* share channels mode */
 } uct_sdma_iface_config_t;
 
 typedef struct uct_sdma_iface_addr {
@@ -95,6 +97,7 @@ typedef struct uct_sdma_iface {
     struct {
         size_t seg_size;    /* Maximal send size */
         double bw;          /* BW for SDMA */
+        int shared_mode;    /* share channels mode */
     } config;
 } uct_sdma_iface_t;
 
