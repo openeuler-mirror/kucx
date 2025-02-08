@@ -79,7 +79,6 @@ void uct_sdma_req_cb(int task_status, void *task_data)
     s_req->result = task_status;
     s_req->is_over = 1;
 
-    ucs_info("sdma: task done");
     return;
 }
 
@@ -235,6 +234,7 @@ ucs_status_t uct_sdma_ep_put_short(uct_ep_h tl_ep, const void *buffer, unsigned 
     uct_rkey_t rkey)
 {
     uct_sdma_ep_t *ep = ucs_derived_of(tl_ep, uct_sdma_ep_t);
+    uct_sdma_iface_t *iface = ucs_derived_of(tl_ep->iface, uct_sdma_iface_t);
     uct_sdma_req_t *s_req;
     sdma_sqe_task_t *s_task;
     ucs_status_t status;
@@ -262,11 +262,14 @@ ucs_status_t uct_sdma_ep_put_short(uct_ep_h tl_ep, const void *buffer, unsigned 
         length, uct_sdma_req_cb, s_req);
 
     /* 提交sdma任务 */
-    status = sdma_copy_data(ep->chn_ctx, s_task, 1);
+    if (iface->config.shared_mode) {
+        status = sdma_icopy_data(ep->chn_ctx, s_task, 1, &(s_req->request));
+    } else {
+        status = sdma_copy_data(ep->chn_ctx, s_task, 1);
+    }
     if (status != UCS_OK) {
         uct_sdma_ep_free_req(ep, 1);
-        ucs_fatal("sdma: ep[%d->%d] put short failed, status = %d",
-            ep->local_ifaceid, ep->remote_ifaceid, status);
+        ucs_fatal("sdma: ep[%d->%d] put short failed, status = %d", ep->local_ifaceid, ep->remote_ifaceid, status);
     }
 
     UCT_TL_EP_STAT_OP(ucs_derived_of(tl_ep, uct_base_ep_t), PUT, SHORT, length);
@@ -277,6 +280,7 @@ ssize_t uct_sdma_ep_put_bcopy(uct_ep_h tl_ep, uct_pack_callback_t pack_cb, void 
     uct_rkey_t rkey)
 {
     uct_sdma_ep_t *ep = ucs_derived_of(tl_ep, uct_sdma_ep_t);
+    uct_sdma_iface_t *iface = ucs_derived_of(tl_ep->iface, uct_sdma_iface_t);
     pack_context_t *pack_ctx = (pack_context_t *)arg;
     uint64_t buffer = (uint64_t)pack_ctx->src;
     size_t length = pack_ctx->length;
@@ -307,11 +311,14 @@ ssize_t uct_sdma_ep_put_bcopy(uct_ep_h tl_ep, uct_pack_callback_t pack_cb, void 
         length, uct_sdma_req_cb, s_req);
 
     /* 提交sdma任务 */
-    status = sdma_copy_data(ep->chn_ctx, s_task, 1);
+    if (iface->config.shared_mode) {
+        status = sdma_icopy_data(ep->chn_ctx, s_task, 1, &(s_req->request));
+    } else {
+        status = sdma_copy_data(ep->chn_ctx, s_task, 1);
+    }
     if (status != UCS_OK) {
         uct_sdma_ep_free_req(ep, 1);
-        ucs_fatal("sdma: ep[%d->%d] put bcopy failed, status = %d",
-            ep->local_ifaceid, ep->remote_ifaceid, status);
+        ucs_fatal("sdma: ep[%d->%d] put bcopy failed, status = %d", ep->local_ifaceid, ep->remote_ifaceid, status);
     }
 
     UCT_TL_EP_STAT_OP(ucs_derived_of(tl_ep, uct_base_ep_t), PUT, BCOPY, length);
@@ -322,6 +329,7 @@ ucs_status_t uct_sdma_ep_put_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, size_t 
     uct_rkey_t rkey, uct_completion_t *comp)
 {
     uct_sdma_ep_t *ep = ucs_derived_of(tl_ep, uct_sdma_ep_t);
+    uct_sdma_iface_t *iface = ucs_derived_of(tl_ep->iface, uct_sdma_iface_t);
     uct_sdma_req_t *s_req;
     sdma_sqe_task_t *s_task;
     ucs_status_t status;
@@ -346,7 +354,6 @@ ucs_status_t uct_sdma_ep_put_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, size_t 
     if (s_req == NULL) {
         ucs_error("sdma: ep[%d->%d] put zcopy failed, not enough slot",
             ep->local_ifaceid, ep->remote_ifaceid);
-        uct_sdma_ep_free_req(ep, 1);
         UCT_TL_EP_STAT_OP(ucs_derived_of(tl_ep, uct_base_ep_t), PUT, ZCOPY, iov_cnt);
         return UCS_ERR_NO_RESOURCE;
     }
@@ -360,11 +367,14 @@ ucs_status_t uct_sdma_ep_put_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, size_t 
     s_req->comp = comp;
 
     /* 提交sdma任务 */
-    status = sdma_copy_data(ep->chn_ctx, &(s_req->task), 1);
+    if (iface->config.shared_mode) {
+        status = sdma_icopy_data(ep->chn_ctx, s_task, 1, &(s_req->request));
+    } else {
+        status = sdma_copy_data(ep->chn_ctx, s_task, 1);
+    }
     if (status != UCS_OK) {
         uct_sdma_ep_free_req(ep, 1);
-        ucs_fatal("sdma: ep[%d->%d] put zcopy failed, status = %d", ep->local_ifaceid,
-            ep->remote_ifaceid, status);
+        ucs_fatal("sdma: ep[%d->%d] put zcopy failed, status = %d", ep->local_ifaceid, ep->remote_ifaceid, status);
     }
 
     UCT_TL_EP_STAT_OP(ucs_derived_of(tl_ep, uct_base_ep_t), PUT, ZCOPY, iov_cnt);
@@ -375,6 +385,7 @@ ucs_status_t uct_sdma_ep_get_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, size_t 
     uct_rkey_t rkey, uct_completion_t *comp)
 {
     uct_sdma_ep_t *ep = ucs_derived_of(tl_ep, uct_sdma_ep_t);
+    uct_sdma_iface_t *iface = ucs_derived_of(tl_ep->iface, uct_sdma_iface_t);
     uct_sdma_req_t *s_req;
     sdma_sqe_task_t *s_task;
     ucs_status_t status;
@@ -389,9 +400,6 @@ ucs_status_t uct_sdma_ep_get_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, size_t 
         return UCS_OK;
     }
 
-    ucs_info("sdma: ep[%d->%d] uct_sdma_ep_get_zcopy2, iov cnt = %lu, length = %lu", ep->local_ifaceid,
-        ep->remote_ifaceid, iov_cnt, length);
-
     buffer = (uint64_t)uct_iov_get_buffer(&iov[0]);
 
     /* 从资源池找1个空闲资源 */
@@ -399,7 +407,6 @@ ucs_status_t uct_sdma_ep_get_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, size_t 
     if (s_req == NULL) {
         ucs_error("sdma: ep[%d->%d] get zcopy failed, not enough slot",
             ep->local_ifaceid, ep->remote_ifaceid);
-        uct_sdma_ep_free_req(ep, 1);
         UCT_TL_EP_STAT_OP(ucs_derived_of(tl_ep, uct_base_ep_t), GET, ZCOPY, iov_cnt);
         return UCS_ERR_NO_RESOURCE;
     }
@@ -413,11 +420,14 @@ ucs_status_t uct_sdma_ep_get_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, size_t 
     s_req->comp = comp;
 
     /* 提交sdma任务 */
-    status = sdma_copy_data(ep->chn_ctx, &(s_req->task), 1);
+    if (iface->config.shared_mode) {
+        status = sdma_icopy_data(ep->chn_ctx, s_task, 1, &(s_req->request));
+    } else {
+        status = sdma_copy_data(ep->chn_ctx, s_task, 1);
+    }
     if (status != UCS_OK) {
         uct_sdma_ep_free_req(ep, 1);
-        ucs_fatal("sdma: ep[%d->%d] get zcopy failed, status = %d", ep->local_ifaceid,
-            ep->remote_ifaceid, status);
+        ucs_fatal("sdma: ep[%d->%d] get zcopy failed, status = %d", ep->local_ifaceid, ep->remote_ifaceid, status);
     }
 
     UCT_TL_EP_STAT_OP(ucs_derived_of(tl_ep, uct_base_ep_t), GET, ZCOPY, iov_cnt);
@@ -428,6 +438,7 @@ ucs_status_t uct_sdma_ep_get_bcopy(uct_ep_h tl_ep, uct_unpack_callback_t unpack_
     uint64_t remote_addr, uct_rkey_t rkey, uct_completion_t *comp)
 {
     uct_sdma_ep_t *ep = ucs_derived_of(tl_ep, uct_sdma_ep_t);
+    uct_sdma_iface_t *iface = ucs_derived_of(tl_ep->iface, uct_sdma_iface_t);
     uct_sdma_req_t *s_req;
     sdma_sqe_task_t *s_task;
     ucs_status_t status;
@@ -460,11 +471,14 @@ ucs_status_t uct_sdma_ep_get_bcopy(uct_ep_h tl_ep, uct_unpack_callback_t unpack_
     s_req->comp = comp;
 
     /* 提交sdma任务 */
-    status = sdma_copy_data(ep->chn_ctx, s_task, 1);
+    if (iface->config.shared_mode) {
+        status = sdma_icopy_data(ep->chn_ctx, s_task, 1, &(s_req->request));
+    } else {
+        status = sdma_copy_data(ep->chn_ctx, s_task, 1);
+    }
     if (status != UCS_OK) {
         uct_sdma_ep_free_req(ep, 1);
-        ucs_fatal("sdma: ep[%d->%d] get bcopy failed, status = %d",
-            ep->local_ifaceid, ep->remote_ifaceid, status);
+        ucs_fatal("sdma: ep[%d->%d] get bcopy failed, status = %d", ep->local_ifaceid, ep->remote_ifaceid, status);
     }
 
     UCT_TL_EP_STAT_OP(ucs_derived_of(tl_ep, uct_base_ep_t), GET, BCOPY, length);
