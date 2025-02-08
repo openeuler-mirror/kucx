@@ -37,6 +37,10 @@ static ucs_config_field_t uct_sdma_iface_config_table[] = {
      ucs_offsetof(uct_sdma_iface_config_t, bw),
      UCS_CONFIG_TYPE_BW},
 
+    {"SHARED_CHANNEL_MODE", "y", "SDMA use shared channels, n means to use exclusive channels",
+     ucs_offsetof(uct_sdma_iface_config_t, shared_mode),
+     UCS_CONFIG_TYPE_BOOL},
+
     {NULL}
 };
 
@@ -46,11 +50,14 @@ ucs_status_t uct_sdma_iface_progress_exec(uct_sdma_iface_t *iface)
     int i;
     int flight = 0; /* 未结束的任务 */
     int result = 0; /* 任务执行结果 */
+    int ret; 
 
     /* 处理下已完成的sdma任务 */
     ucs_spin_lock(&iface->lock);
 
-    sdma_progress(iface->src_sdma_handle);
+    if (!iface->config.shared_mode) {
+        sdma_progress(iface->src_sdma_handle);
+    }
 
     /* 检查sdma任务执行结果 */
     i = sq->head;
@@ -59,7 +66,24 @@ ucs_status_t uct_sdma_iface_progress_exec(uct_sdma_iface_t *iface)
          * 如果当前任务还未结束，则认为后续的任务都没有结束。
          * 约束：sdma任务是按顺序执行完毕的
          */
-        if (sq->reqs[i].is_over != 1) {
+        if (iface->config.shared_mode) {
+            /*
+             * sdma_iquery_chn is a non-block shared-chn interface, SDMA_RNDCNT_ERR means in_progress
+             * and sdma_iquery_chn dont call task_cb.
+             */
+            ret = sdma_iquery_chn(iface->src_sdma_handle, &sq->reqs[i].request);
+            if (ret != SDMA_SECCESS) {
+                if (ret == SDMA_RNDCNT_ERR) {
+                    sq->timeout++;
+                    flight = 1;
+                    break;
+                } else {
+                    ucs_fatal("kupl_iface:chn_id[%d] src_dev_idx[%d] cur_cpu[%d] status = %d, error_code = %d", iface->chn_id,
+                              iface->src_dev_idx, iface->cur_cpu, result, ret);
+                }
+            }
+            sq->reqs[i].result = ret;
+        } else if (sq->reqs[i].is_over != 1) {
             sq->timeout++;
             flight = 1;
             break;
@@ -100,7 +124,7 @@ ucs_status_t uct_sdma_iface_progress_exec(uct_sdma_iface_t *iface)
 
     if (sq->timeout > EP_PROGRESS_TIMEOUT) {
         sq->timeout = 0;
-        ucs_warn("sdma_iface:chn_id[%d] src_dev_idx[%d] cur_cpu[%d] requests already query %d times", iface->chn_id,
+        ucs_debug("sdma_iface:chn_id[%d] src_dev_idx[%d] cur_cpu[%d] requests already query %d times", iface->chn_id,
             iface->src_dev_idx, iface->cur_cpu, EP_PROGRESS_TIMEOUT);
     }
 
@@ -265,6 +289,7 @@ static UCS_CLASS_INIT_FUNC(uct_sdma_iface_t, uct_md_h md, uct_worker_h worker, c
         UCS_STATS_ARG(params->mode.device.dev_name));
 
     self->sdma_md = (uct_sdma_md_t *)md;
+    self->config.shared_mode = config->shared_mode;
     if (NULL == self->sdma_md) {
         ucs_error("Failed to allocate memory for uct_sdma_md_t");
         return UCS_ERR_NO_MEMORY;
@@ -303,9 +328,17 @@ static UCS_CLASS_INIT_FUNC(uct_sdma_iface_t, uct_md_h md, uct_worker_h worker, c
         ucs_info("self->src_pasid[%d] = %u", i, self->src_pasid[i]);
     }
 
-    self->src_sdma_handle = sdma_alloc_chn(self->sdma_md->sdma_fd[self->src_dev_idx]);
+    if (self->config.shared_mode) {
+        self->src_sdma_handle = sdma_init_chn(self->sdma_md->sdma_fd[self->src_dev_idx], self->chn_id);
+    } else {
+        self->src_sdma_handle = sdma_alloc_chn(self->sdma_md->sdma_fd[self->src_dev_idx]);
+    }
+
     if (self->src_sdma_handle == NULL) {
         ucs_error("Failed to create sdma_device[%d] handle", self->src_dev_idx);
+        uct_shmem_del(self->shmem_msg);
+        free(shmem_msg);
+        self->shmem_msg = NULL;
         return UCS_ERR_IO_ERROR;
     }
     self->send_size = MAX_SDMA_PUT_SHORT_SIZE;
@@ -329,7 +362,11 @@ static UCS_CLASS_CLEANUP_FUNC(uct_sdma_iface_t)
     ucs_status_t ret;
     uct_base_iface_progress_disable(&self->super.super, UCT_PROGRESS_SEND | UCT_PROGRESS_RECV);
     if (self->src_sdma_handle != NULL) {
-        sdma_free_chn(self->src_sdma_handle);
+        if (self->config.shared_mode) {
+            sdma_deinit_chn(self->src_sdma_handle);
+        } else {
+            sdma_free_chn(self->src_sdma_handle);
+        }
     }
 
     ret = uct_shmem_del(self->shmem_msg);
