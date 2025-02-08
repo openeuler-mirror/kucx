@@ -79,7 +79,6 @@ void uct_sdma_req_cb(int task_status, void *task_data)
     s_req->result = task_status;
     s_req->is_over = 1;
 
-    ucs_info("sdma: task done");
     return;
 }
 
@@ -388,9 +387,6 @@ ucs_status_t uct_sdma_ep_get_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, size_t 
         UCT_TL_EP_STAT_OP(ucs_derived_of(tl_ep, uct_base_ep_t), GET, ZCOPY, iov_cnt);
         return UCS_OK;
     }
-
-    ucs_info("sdma: ep[%d->%d] uct_sdma_ep_get_zcopy2, iov cnt = %lu, length = %lu", ep->local_ifaceid,
-        ep->remote_ifaceid, iov_cnt, length);
 
     buffer = (uint64_t)uct_iov_get_buffer(&iov[0]);
 
