@@ -498,12 +498,14 @@ uct_ib_device_set_pci_id(uct_ib_device_t *dev, const char *sysfs_path)
               dev->pci_id.vendor, dev->pci_id.device);
 }
 
-static inline int uct_hns_device_spec_match(uct_ib_device_t *dev)
+static inline int uct_hns_device_spec_match_and_set(uct_ib_device_t *dev)
 {
     uct_hns_device_spec_t *spec = uct_hns_builtin_device_specs;
 
     while (spec->vendor != 0x0 || spec->device != 0x0) {
         if (IBV_DEV_ATTR(dev, vendor_id) == spec->vendor && IBV_DEV_ATTR(dev, vendor_part_id) == spec->device) {
+            dev->pci_id.vendor = spec->vendor;
+            dev->pci_id.device = spec->device;
             return 1;
         }
         spec++;
@@ -560,12 +562,15 @@ ucs_status_t uct_ib_device_query(uct_ib_device_t *dev,
 
     sysfs_path   = ucs_topo_resolve_sysfs_path(dev_path, path_buffer);
 
-    if (uct_hns_device_spec_match(dev)) {
-        sysfs_path = NULL;
-    }
     dev->sys_dev = ucs_topo_get_sysfs_dev(dev_name, sysfs_path,
                                           sys_device_priority);
-    uct_ib_device_set_pci_id(dev, sysfs_path);
+
+    if (uct_hns_device_spec_match_and_set(dev)) {
+        sysfs_path = NULL;
+    } else {
+        uct_ib_device_set_pci_id(dev, sysfs_path);
+    }
+
     dev->pci_bw = ucs_topo_get_pci_bw(dev_name, sysfs_path);
 
     return UCS_OK;

@@ -56,6 +56,14 @@ AC_ARG_WITH([mlx5-dv],
                 regular mode.])])
 
 #
+# optimized gid table interface support
+#
+AC_ARG_WITH([opt-gid-table],
+            [AS_HELP_STRING([--with-opt-gid-table], [Compile with optimized gid table interface
+                support. ibv_query_gid_table support provides acceleration capabilities
+                when ib init.])])
+
+#
 # TM (IB Tag Matching) Support
 #
 AC_ARG_WITH([ib-hw-tm],
@@ -220,12 +228,13 @@ AS_IF([test "x$with_ib" = "xyes"],
                             [], [[#include <infiniband/verbs.h>]])
 
        # We could use ibv_query_gid_table to quickly get gids information
-       AC_CHECK_DECL(ibv_query_gid_table, [
-       AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <infiniband/verbs.h>]],
-                         [[ibv_query_gid_table(NULL, NULL, NULL, NULL)]])],
-                         [AC_DEFINE([HAVE_IBV_QUERY_GID_TABLE], 1,
-                             [use ibv_query_gid_table])])],
-                             [], [[#include <infiniband/verbs.h>]])
+       AS_IF([test "x$with_opt_gid_table" = "xyes" ], [
+            AC_CHECK_DECL(ibv_query_gid_table, [
+            AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <infiniband/verbs.h>]],
+                                [[ibv_query_gid_table(NULL, NULL, NULL, NULL)]])],
+                                [AC_DEFINE([HAVE_IBV_QUERY_GID_TABLE], 1,
+                                    [use ibv_query_gid_table])])],
+                                    [], [[#include <infiniband/verbs.h>]])])
 
        AC_CHECK_MEMBERS([struct ibv_device_attr_ex.pci_atomic_caps],
                         [], [], [[#include <infiniband/verbs.h>]])
