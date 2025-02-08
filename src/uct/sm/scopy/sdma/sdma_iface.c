@@ -72,7 +72,7 @@ ucs_status_t uct_sdma_iface_progress_exec(uct_sdma_iface_t *iface)
              * and sdma_iquery_chn dont call task_cb.
              */
             ret = sdma_iquery_chn(iface->src_sdma_handle, &sq->reqs[i].request);
-            if (ret != SDMA_SECCESS) {
+            if (ret != SDMA_SUCCESS) {
                 if (ret == SDMA_RNDCNT_ERR) {
                     sq->timeout++;
                     flight = 1;
