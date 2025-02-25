@@ -21,16 +21,33 @@ ucs_status_t uct_sdma_ep_flush(uct_ep_h tl_ep, unsigned flags,
 {
     uct_sdma_ep_t *sdma_ep = ucs_derived_of(tl_ep, uct_sdma_ep_t);
     uct_sdma_req_queue_t *sq = sdma_ep->req_q;
+    uct_sdma_iface_t *iface = ucs_derived_of(sq, uct_sdma_iface_t);
     int flight = 0;
     int result = 0;
-    int i;
+    int i, ret;
 
     ucs_spin_lock(&sdma_ep->lock);
-    sdma_progress(sdma_ep->chn_ctx);
+    if (!iface->config.shared_mode) {
+        sdma_progress(iface->src_sdma_handle);
+    }
 
     i = sq->head;
     while (i != sq->tail) {
-        if (sq->reqs[i].is_over != 1) {
+        if (iface->config.shared_mode) {
+            /* must wait channal completed */
+            ret = sdma_iwait_chn(iface->src_sdma_handle, &sq->reqs[i].request);
+            if (ret != SDMA_SUCCESS) {
+                if (ret == SDMA_RNDCNT_ERR) {
+                    sq->timeout++;
+                    flight = 1;
+                    break;
+                } else {
+                    ucs_fatal("kupl_iface:chn_id[%d] src_dev_idx[%d] cur_cpu[%d] status = %d, error_code = %d", iface->chn_id,
+                              iface->src_dev_idx, iface->cur_cpu, result, ret);
+                }
+            }
+            sq->reqs[i].result = ret;
+        } else if (sq->reqs[i].is_over != 1) {
             sq->timeout++;
             flight = 1;
             break;
