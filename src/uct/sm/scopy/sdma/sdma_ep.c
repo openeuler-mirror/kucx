@@ -21,7 +21,7 @@ ucs_status_t uct_sdma_ep_flush(uct_ep_h tl_ep, unsigned flags,
 {
     uct_sdma_ep_t *sdma_ep = ucs_derived_of(tl_ep, uct_sdma_ep_t);
     uct_sdma_req_queue_t *sq = sdma_ep->req_q;
-    uct_sdma_iface_t *iface = ucs_derived_of(sq, uct_sdma_iface_t);
+    uct_sdma_iface_t *iface = ucs_derived_of(tl_ep->iface, uct_sdma_iface_t);
     int flight = 0;
     int result = 0;
     int i, ret;
