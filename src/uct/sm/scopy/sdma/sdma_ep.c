@@ -42,7 +42,7 @@ ucs_status_t uct_sdma_ep_flush(uct_ep_h tl_ep, unsigned flags,
                     flight = 1;
                     break;
                 } else {
-                    ucs_fatal("kupl_iface:chn_id[%d] src_dev_idx[%d] cur_cpu[%d] status = %d, error_code = %d", iface->chn_id,
+                    ucs_fatal("sdma_iface:chn_id[%d] src_dev_idx[%d] cur_cpu[%d] status = %d, error_code = %d", iface->chn_id,
                               iface->src_dev_idx, iface->cur_cpu, result, ret);
                 }
             }
