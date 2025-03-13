@@ -1014,6 +1014,13 @@ ucp_is_resource_in_transports_list(const char *tl_name,
     if (!ucs_string_set_contains(aux_tls, tl_name)) {
         /* Disable the transport which is not used as an auxiliary, if
          * UCX_TLS=^tl_name, or alias={tl_name} and UCX_TLS=^alias. */
+
+        /* some tls are not enabled by default */
+        for (excl_tl = tl_exclusions_in_all; *excl_tl != NULL; excl_tl++) {
+            if (!strcmp(tl_name, *excl_tl)) {
+                return 0;
+            }
+        }
         return !(search_result & UCP_TRANSPORTS_LIST_SEARCH_RESULT_PRIMARY);
     }
 
