@@ -1,7 +1,7 @@
 /**
 * Copyright (c) NVIDIA CORPORATION & AFFILIATES, 2001-2021. ALL RIGHTS RESERVED.
 * Copyright (C) ARM Ltd. 2016-2017.  ALL RIGHTS RESERVED.
-* Copyright (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
+* Copyright (c) Huawei Technologies Co., Ltd. 2024-2025. All rights reserved.
 *
 * See file LICENSE for terms.
 */
@@ -2910,7 +2910,7 @@ static void ucp_worker_timeout_warn(ucp_worker_h worker)
     return;
 }
 
-static void ucp_worker_check_timeout(ucp_worker_h worker, unsigned count_complete)
+static void ucp_worker_check_timeout(ucp_worker_h worker, int complete_flag)
 {
     /** start_time: the start tick of the blocking duration.
      *  last_time: last tick record.
@@ -2928,7 +2928,7 @@ static void ucp_worker_check_timeout(ucp_worker_h worker, unsigned count_complet
     /* Uncomplete request count. */
     exp_req_count = tm->expected.sw_all_count;
     /* If uncomplete request count is not 0 but no requests completed, some requests blocked. */
-    block_flag = (count_complete == 0 && exp_req_count > 0) ? 1 : 0;
+    block_flag = (complete_flag == 0 && exp_req_count > 0) ? 1 : 0;
     current_time = ucs_get_time();
     if (!block_flag) {
         /* No requests block, update the start tick and reset pending_time. */
@@ -2960,6 +2960,8 @@ unsigned ucp_worker_progress(ucp_worker_h worker)
 {
     unsigned count;
     static uint32_t timeout_check_count = 0;
+    // If some reqs complete.
+    static int req_complete_flag = 0;
     int detect_flag = worker->context->config.ext.if_enable_timeout_detect;
 
     /* worker->inprogress is used only for assertion check.
@@ -2970,10 +2972,12 @@ unsigned ucp_worker_progress(ucp_worker_h worker)
     /* check that ucp_worker_progress is not called from within ucp_worker_progress */
     ucs_assert(worker->inprogress++ == 0);
     count = uct_worker_progress(worker->uct);
+    req_complete_flag = (count > 0) ? 1 : req_complete_flag;
     if (detect_flag) {
         if (++timeout_check_count % 1000 == 0) {
             timeout_check_count = 0;
-            ucp_worker_check_timeout(worker, count);
+            ucp_worker_check_timeout(worker, req_complete_flag);
+            req_complete_flag = 0;
         }
     }
     ucs_async_check_miss(&worker->async);
