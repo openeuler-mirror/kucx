@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2024-2025. All rights reserved.
  * See file LICENSE for terms.
  */
 #define _GNU_SOURCE
@@ -33,7 +33,7 @@ static ucs_config_field_t uct_sdma_iface_config_table[] = {
      * shared bw for load balancing;
      * dedicate bw for comparing with cma
      */
-    {"BW", "38400MBs", "BW of SDMA",
+    {"BW", "10000MBs", "BW of SDMA",
      ucs_offsetof(uct_sdma_iface_config_t, bw),
      UCS_CONFIG_TYPE_BW},
 
@@ -177,7 +177,7 @@ static ucs_status_t uct_sdma_iface_query(uct_iface_h tl_iface, uct_iface_attr_t 
     attr->cap.am.max_iov = SIZE_MAX;
 
     attr->latency = ucs_linear_func_make(0, 0);
-    attr->bandwidth.dedicated = iface->config.bw;
+    attr->bandwidth.dedicated = 0;
     attr->bandwidth.shared = iface->config.bw;
     attr->overhead = 10e-9;
     attr->priority = 1;
